@@ -1,0 +1,111 @@
+{% extends "layout.html" %}
+{% load reporters %}
+{% load displaymanager_extras %}
+{% load pagination %}
+{% block title %}
+{% endblock %}
+{% block javascripts %}
+<script language="javascript" type="text/javascript" src="/static/webui/javascripts/jquery.flot.js"></script>
+<script language="javascript" type="text/javascript">
+
+$(document).ready(function() {
+        var o  = { xaxis : {mode:'time'}};
+        var v1 = { label:'{{ js_l1 }}', data: {{ js_x1}}};
+        var v2 = { label:'{{ js_l2 }}', data: {{ js_x2}}};
+        $.plot($("#graph"),[v1,v2],o);
+    	$("#stats").slideUp(0);
+	    $("#map").slideUp(0);
+});
+$(function(){
+    $("#toggledata").click(function(event){ 
+            if( $("#data").is(":hidden")){
+                $("#data").slideDown(0);
+            }else{
+                $("#data").slideUp(0);
+            }
+    });
+    $("#togglegraph").click(function(event){ 
+            if( $("#graph").is(":hidden")){
+                $("#graph").slideDown(0);
+            }else{
+                $("#graph").slideUp(0);
+            }
+    });
+    $("#togglemap").click(function(event){ 
+            if( $("#map").is(":hidden")){
+                $("#map").slideDown(0);
+            }else{
+                $("#map").slideUp(0);
+            }
+    });
+    $("#togglestats").click(function(event){ 
+            if( $("#stats").is(":hidden")){
+                $("#stats").slideDown(0);
+            }else{
+                $("#stats").slideUp(0);
+            }
+    });
+});
+
+
+				</script>
+{% endblock %}
+{% block content %}
+                <center>
+                    <table>
+                        <tr>
+
+                            {% if navbar %}
+                                {% for n in navbar %}
+                                    <td>{{ n|linkify:"childhealth/" }}</td>
+                                     <td>|</td>
+                                {% endfor %}
+                            {% endif %}
+
+                            <td align="right">Filter</td>
+                            <td align="right">
+		                        <form method="post" action="{{ breadcrumbs }}/date">
+				                    <input type="textfield" name="start-date" value="YYYYMMDD" size="8">to
+				                    <input type="textfield" name="end-date" value="YYYYMMDD" size="8">
+				                    <input type="submit" value="Search"/>
+                                    MM/DD optional
+                                </form>
+                            </td>
+                        </tr>
+                    </table>
+                </center>
+
+                    {% block subheader %}
+                         <p></p><center><h2>
+                            {% if breadcrumbs %}
+                            {{ breadcrumbs }}
+                            {% else %}
+                            {{ title }}
+                            {% endif %}
+                         </h2></center>
+                         <br>
+<a  href="javascript:void(0);" id="toggledata">Toggle Data</a> | 
+
+<a  href="javascript:void(0);" id="togglestats">Toggle Stats</a> | 
+                            <a  href="javascript:void(0);" id="togglegraph">Toggle Graph</a> | 
+                            <a  href="javascript:void(0);" id="togglemap">Toggle Map</a>
+                            <br><br>
+                            
+                    {% endblock %}
+                    {% block bodyarea %}
+                    <table width="100%"><tr><td valign="top" id=><div id="data">
+		                    {% block left %}{% endblock %}
+			</div>
+                        </td><td valign="top" width="250" align="right">
+                            <div id="stats" style="height:250px">
+                            {% block right %}
+                            {% endblock %}
+                            
+                            </div>
+                            <div id="graph" style="height:250px"> 
+                            </div>
+                            <div id="map" style="height:250px"> </div>
+                        </td></tr></table>
+                    {% endblock %}
+                    
+{% endblock %}

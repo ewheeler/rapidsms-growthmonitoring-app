@@ -1,0 +1,30 @@
+[
+    {
+        "pk": 1,
+        "model": "locations.locationtype",
+        "fields": {
+            "name": "Country"
+        }
+    },
+    {
+        "pk": 2,
+        "model": "locations.locationtype",
+        "fields": {
+            "name": "Region"
+        }
+    },
+    {
+        "pk": 3,
+        "model": "locations.locationtype",
+        "fields": {
+            "name": "District"
+        }
+    },
+    {
+        "pk": 4,
+        "model": "locations.locationtype",
+        "fields": {
+            "name": "GMC"
+        }
+    }
+]

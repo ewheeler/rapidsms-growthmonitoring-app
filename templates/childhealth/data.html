@@ -1,0 +1,56 @@
+{% extends "childhealth/base.html" %}
+{% load pagination %}
+{% load displaymanager_extras %}
+{% block  stylesheets %}
+<link type="text/css" rel="stylesheet" href="/static/childhealth/stylesheets/layout.css" />
+{% endblock %}
+{# use grouper #}
+		                    {% block left %}
+                                <table>
+                               {% for report in display_data.left %}
+			                        {% with display_data.left|get:report as rdata %}
+                                    <tr id="reportheader">
+                                    {% for  r in report|listify %} 
+                                    <td>{{ r }} </td>
+                                    {% endfor %} 
+                                    </td></tr>
+                                    </tr>
+        		                    {% for r in rdata.paginate.object_list %}
+                                        <tr id="{% cycle 'row1' 'row2' %}">
+			                            {% with r|formatter:report as datum %}
+                                        {% for d in datum %}
+                                            <td>{% flowify d r breadcrumbs view filter %}</td>
+                                        {% endfor %}
+                                        {% endwith %}
+                                        </tr>
+                                   {% endfor %}
+                                    <tr><td colspan="{{report|length}}">{% paginator rdata.paginate %}<a href="{% url download-xls report|titles rdata.cmd %}">Download Excel</a></td>
+
+                                   {% endwith %}
+                                   {%endfor %}
+
+                        </table>
+{% endblock %}
+		                    {% block right %}
+		<table>
+                    {% if display_data.stats.dates %}
+			            <tr id="reportheader"><td colspan="{{ display_data.stats.header.size }}">{{display_data.stats.dates}}</td> </tr>
+                    {% endif %}
+			            <tr id="reportheader">
+                        {% for h in display_data.stats.header %} 
+                                    <td>{{ h }} </td>
+                                    {% endfor %} 
+                                    </tr>
+				    {% for row in display_data.stats.data %}
+                                        <tr id="{% cycle 'row1' 'row2' %}">
+			                {% for h in display_data.stats.header %}
+					<td>				        	
+                        {{ row|get:h }}
+					</td>                                        
+					{% endfor %}
+                                     
+                                        </tr>
+                                   {% endfor %}
+ 
+				</table>		           
+{% endblock %}

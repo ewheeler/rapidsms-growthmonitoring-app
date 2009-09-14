@@ -1,0 +1,28 @@
+{% extends "childhealth/base.html" %}
+
+
+		                    {% block bodyarea %}
+<table width="100%">
+    <tr>
+        <td valign="top" width="80%">
+            {% for t in text %}
+        <h3> {{ t.title }} </h3>
+        <p> {{ t.text }} </p>
+            <br>
+  {% endfor %}
+
+        </td>
+
+        <td width="*" valign="top">
+            {% if files %}
+            <h2>Documents</h2>
+            {% endif %}
+            {% for f in files %}
+            <a href="{% url download-file id=f.id %}">{{f.title.strip }}</a><br>
+            {% endfor %}
+        </td>
+    </tr>
+
+</table>
+
+{% endblock %}
