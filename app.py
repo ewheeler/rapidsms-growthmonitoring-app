@@ -8,7 +8,7 @@ from django.db.models import F
 
 import rapidsms
 from rapidsms.message import Message
-from apps.logger.models import * 
+from logger.models import * 
 from rapidsms.connection import Connection
 from rapidsms.parsers.keyworder import * 
 from  models import * 
@@ -72,16 +72,17 @@ class App(rapidsms.app.App):
 
 
 
-    def __find_patient(self, gmc,id,order="ts"):
+    def __find_patient(self, cluster, household, code):
         try:
             params = {}
-            params["person__short_id"] = "\"%s\"" % id 
-            params["person__location"] = "\"%s\"" %  gmc 
-            cp = ChildPatient.objects.filter(**params).orderby("\"%s\"" % order)[0]
-            cp.ts = datetime.datetime.now()
+            params["person__code"] = "\"%s\"" % code
+            params["person__location"] = "\"%s\"" %  cluster
+            params["person__location"] = "\"%s\"" %  household
+            cp = ChildPatient.objects.get(**params)
+            #cp.ts = datetime.datetime.now()
             return {"PATIENT:":cp}
         except:
-            return {"ERROR": "NO RECORD FOR child %s at gmc %s" % (child,gmc)}
+            return {"ERROR": "NO RECORD FOR child %s in household  %s in cluster %s" % (child,gmc)}
     
     def __find_worker(self, gmc,id,order="ts"):
         try:
@@ -109,7 +110,6 @@ class App(rapidsms.app.App):
             p = self.__find_patient(gmc,child)
             w = self.__find_worker(gmc,hsa)
 
-            hw.ts = datetime.datetime.now()
             hw.message_count  = hw.message_count+1
             ind = Indicator(health_worker=w["WORKER"], child_patient=p["PATIENT"], height=ht, weight=wt, muac=muac,oedema=oedema,diarrea=diarrea)
             ind.calcStatus()
@@ -148,33 +148,9 @@ class App(rapidsms.app.App):
         
         respond(message,resp) 
     
-    @kw("exit (.*?) (.*?)")
-    def exitpatient (self, message, gmc,child):
-        resp = {}
-        try:
-            p = self.__find_patient(gmc,child)
-            p.person.active = False
-            p.short_id = 0
-            p.save()
-            resp["OK"] = "EXIT child id %s from gmc %s " % (child,gmc)
-        except Exception,e:
-            resp["ERROR"] = "UNABLE TO EXIT child id %s from gmc %s" % (child,gmc)
-        respond(message,resp) 
 
-    @kw("new (.*?) (.*?) (.*?) (.*?) (.*?)")
-    def newpatient(self, message, gmc, child, gender, age, contact):
-        resp = {}
-        try:
-            reporter = self.__get_reporter(message,contact)
-            person = Person(reporter=reporter, location=gmc, short_id=child,gender=gender,dob=Person.dob_from_age(int(age)))
-            person.save()
-            resp["OK"] = "ADDED PATIENT %s for %s" % (short_id, location)
-        except Exception,e:
-            resp["ERROR"] = "UNABLE TO ADD  %s for %s" % (short_id, location)
-        respond(message,resp) 
-
-    @kw("hsa (.*?) (.*?)\?(.*?)\?(.*?)")
-    def newhealthworker(self, message, gmc, hsa,oldgmc="",oldhsa=""):
+    @kw("register (.*?) (.*?)\?(.*?)\?(.*?)")
+    def register_healthworker(self, message, gmc, hsa,oldgmc="",oldhsa=""):
         resp = {}
         try:
             reporter = self.__get_reporter(message)
@@ -191,4 +167,3 @@ class App(rapidsms.app.App):
         except:
             resp["ERROR"] = "UNABLE TO ADD  %s for %s" % (short_id, location)
         respond(message,resp) 
-

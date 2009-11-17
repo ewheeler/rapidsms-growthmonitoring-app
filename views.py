@@ -19,14 +19,14 @@ from django.db.models import Avg,Max,Min,Count
 
 
 from rapidsms.webui.utils import render_to_response, paginated
-from apps.displaymanager.utils import *
-from apps.export.utils import excel,download
-from apps.childhealth.models import *  #no hard code
-from apps.pilot.models import *
-from apps.locations.models import *
-from apps.reporters.models import *
-from apps.docmanager.models import *
-from apps.displaymanager.models import *
+from displaymanager.utils import *
+from export.utils import excel#,download
+from childhealth.models import *  #no hard code
+from pilot.models import *
+from locations.models import *
+from reporters.models import *
+from docmanager.models import *
+from displaymanager.models import *
 from models import *
 
 
@@ -172,7 +172,7 @@ def parse_form(req,breadcrumbs):
 #header and data are hash->list.  The key is the column, the list are order
 def create_data_hash(req,data={},breadcrumbs="",filter="",view="",kfilter={},measure=""):
     resultset = {}
-    resultset["title"] = HeaderDisplay.by_view("INDEX")[0]
+    resultset["title"] = HeaderDisplay.by_view("INDEX")#[0]
     resultset["navbar"] =HeaderDisplay.by_view("NAVBAR")
     resultset["graphchoice"] =HeaderDisplay.by_view("GRAPHCHOICES")
     resultset["breadcrumbs"] = breadcrumbs

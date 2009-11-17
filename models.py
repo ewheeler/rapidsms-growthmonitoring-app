@@ -6,15 +6,14 @@ from django.contrib.auth import models as auth_models
 from django.core.exceptions import ObjectDoesNotExist 
 from datetime import datetime, date
 
-from apps.locations.models import Location  
-from apps.reporters.models import Reporter,PersistantConnection
-from apps.person.models import PersonBase
+from locations.models import Location  
+from reporters.models import Reporter
+from people.models import Person
 
 from messages import *
    
-class HealthWorker(models.Model):
-    person                 = models.ForeignKey(PersonBase)
-    ts                     = models.DateTimeField(auto_now_add=True,default=datetime.now())
+class HealthWorker(Reporter):
+    last_updated           = models.DateTimeField(auto_now=True)
     errors                 = models.IntegerField(max_length=5,default=0) 
     message_count          = models.IntegerField(max_length=5,default=0)  # I am going to log this explicitly - not through the Logger
 
@@ -25,10 +24,9 @@ class HealthWorker(models.Model):
     def __unicode__(self):
         return "%s" % self.id
 
-class ChildPatient(models.Model):
-    person                 = models.ForeignKey(PersonBase)
+class Patient(Person):
     status   = models.CharField(max_length=1000,choices=tuple(CHILD_HEALTH_STATUS),default="",blank=True)
-    ts                     = models.DateTimeField(auto_now_add=True,default=datetime.now())
+    last_updated           = models.DateTimeField(auto_now=True)
 
     def __unicode__(self):
         return "%s" % (self.id)
@@ -37,17 +35,17 @@ class ChildPatient(models.Model):
         verbose_name = "Patient"
         
 
-class Indicator(models.Model): 
+class Assesment(models.Model): 
 
     health_worker       = models.ForeignKey(HealthWorker,null=True)
-    child_patient      = models.ForeignKey(ChildPatient)
+    patient              = models.ForeignKey(Patient)
     height             = models.DecimalField(max_digits=4,decimal_places=1,null=True) 
     weight             = models.DecimalField(max_digits=4,decimal_places=1,null=True) 
     muac               = models.DecimalField(max_digits=4,decimal_places=2,null=True) 
     oedema             = models.BooleanField(default=False)
     diarrea            = models.BooleanField(default=False)
     quality      = models.IntegerField(max_length=1,default=1)
-    ts           = models.DateTimeField(auto_now_add=True)
+    date           = models.DateTimeField(auto_now_add=True)
     # I dont want to calc on fly
     mam            = models.BooleanField(default=False)
     sam            = models.BooleanField(default=False)
@@ -56,7 +54,7 @@ class Indicator(models.Model):
 
 
     class Meta:
-        verbose_name = "Indicator"
+        verbose_name = "Nutrition Assessment"
 
     def __unicode__(self):
         return "%s" % self.id
@@ -64,18 +62,18 @@ class Indicator(models.Model):
     #not pretty
     def calc_health_status(self):
         try: 
-            s_calc = StuntingTable.objects.filter(gender=self.patient.reporter.gender,age=self.patient.age())
+            s_calc = StuntingTable.objects.filter(gender=self.patient.gender,age=self.patient.age())
             self.stunting = self.height < s_calc.height
             malnurished = WastingTable.objects.get(height=self.height)
             self.sam = self.weight <= malnurished.weight_70 
             self.mam = (self.weight <= malnurished.weight_80) and (not self.sam)
-            self.child_patient.status = CHILD_HEALTH_STATUS[CHILD_HEALTH_STATUS_BOOL[(self.mam,self.sam)]]       
+            self.patient.status = CHILD_HEALTH_STATUS[CHILD_HEALTH_STATUS_BOOL[(self.mam,self.sam)]]       
         except:
             return False
     
     def verify(self): 
         resp = {}
-        i = Indicators.objects.filter(child_patient=self.child_patient).orderby("ts")[0]
+        i = Assessment.objects.filter(patient=self.patient).orderby("last_updated")[0]
         if i.height > self.height: return {"ERROR":"last height is %s and this height is %s" % (i.height,self.height)}
         return resp
         
