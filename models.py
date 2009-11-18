@@ -13,43 +13,71 @@ from people.models import Person
 from messages import *
    
 class HealthWorker(Reporter):
+    HW_STATUS_CHOICES = (
+        ('A', 'Active'),
+        ('I', 'Inactive'),
+    )
     last_updated           = models.DateTimeField(auto_now=True)
     errors                 = models.IntegerField(max_length=5,default=0) 
     message_count          = models.IntegerField(max_length=5,default=0)  # I am going to log this explicitly - not through the Logger
+    status                 = models.CharField(max_length=1,choices=HW_STATUS_CHOICES,default='A')
+    interviewer_id          = models.PositiveIntegerField(max_length=10, blank=True, null=True)
 
 
     class Meta:
         verbose_name = "Health Worker"
 
     def __unicode__(self):
-        return "%s" % self.id
+        return "%s" % (self.full_name())
 
 class Patient(Person):
-    status   = models.CharField(max_length=1000,choices=tuple(CHILD_HEALTH_STATUS),default="",blank=True)
-    last_updated           = models.DateTimeField(auto_now=True)
+    status          = models.CharField(max_length=1000,choices=tuple(CHILD_HEALTH_STATUS),default="",blank=True)
+    last_updated    = models.DateTimeField(auto_now=True)
+    household_id    = models.PositiveIntegerField(max_length=10, blank=True, null=True)
+    cluster_id      = models.PositiveIntegerField(max_length=10, blank=True, null=True)
+    age_in_months   = models.PositiveIntegerField(max_length=10, blank=True, null=True)
+
+    @property
+    def assessments(self):
+        # returns patient's GOOD assessments
+        return Assessment.objects.filter(patient=self.patient, status='G').order_by('-patient__last_updated')
 
     def __unicode__(self):
-        return "%s" % (self.id)
+        return "Child %s, Household %s, Cluster %s" % (self.code, self.household_id, self.cluster_id)
     
     class Meta:
         verbose_name = "Patient"
         
 
-class Assesment(models.Model): 
+class Assessment(models.Model): 
+    ASS_STATUS_CHOICES = (
+        ('C', 'Cancelled'),
+        ('G', 'Good'),
+        ('B', 'Bad'),
+    )
 
-    health_worker       = models.ForeignKey(HealthWorker,null=True)
-    patient              = models.ForeignKey(Patient)
-    height             = models.DecimalField(max_digits=4,decimal_places=1,null=True) 
-    weight             = models.DecimalField(max_digits=4,decimal_places=1,null=True) 
-    muac               = models.DecimalField(max_digits=4,decimal_places=2,null=True) 
-    oedema             = models.BooleanField(default=False)
-    diarrea            = models.BooleanField(default=False)
-    quality      = models.IntegerField(max_length=1,default=1)
-    date           = models.DateTimeField(auto_now_add=True)
-    # I dont want to calc on fly
-    mam            = models.BooleanField(default=False)
-    sam            = models.BooleanField(default=False)
-    stunting       = models.BooleanField(default=False)
+    # who what where when why
+    healthworker       = models.ForeignKey(HealthWorker,null=True)
+    patient             = models.ForeignKey(Patient)
+    date                = models.DateTimeField(auto_now_add=True)
+    status              = models.CharField(max_length=1,choices=ASS_STATUS_CHOICES,default='G')
+
+    # indicators
+    height              = models.DecimalField(max_digits=4,decimal_places=1,null=True) 
+    weight              = models.DecimalField(max_digits=4,decimal_places=1,null=True) 
+    muac                = models.DecimalField(max_digits=5,decimal_places=2,null=True) 
+    oedema              = models.BooleanField(default=False)
+    diarrea             = models.BooleanField(default=False)
+
+    # expensive calculations 
+    mam                 = models.BooleanField(default=False)
+    sam                 = models.BooleanField(default=False)
+    stunting            = models.BooleanField(default=False)
+
+    # z-scores
+    weight4age          = models.DecimalField(max_digits=4,decimal_places=2,null=True,blank=True)
+    height4age          = models.DecimalField(max_digits=4,decimal_places=2,null=True,blank=True)
+    weight4height       = models.DecimalField(max_digits=4,decimal_places=2,null=True,blank=True)
 
 
 
@@ -59,8 +87,12 @@ class Assesment(models.Model):
     def __unicode__(self):
         return "%s" % self.id
      
+    def analyze(self):
+        self.nutritional_status()
+        self.zscores()
+
     #not pretty
-    def calc_health_status(self):
+    def nutritional_status(self):
         try: 
             s_calc = StuntingTable.objects.filter(gender=self.patient.gender,age=self.patient.age())
             self.stunting = self.height < s_calc.height
@@ -71,9 +103,16 @@ class Assesment(models.Model):
         except:
             return False
     
+    def zscores(self):
+        pass
+
     def verify(self): 
         resp = {}
-        i = Assessment.objects.filter(patient=self.patient).orderby("last_updated")[0]
-        if i.height > self.height: return {"ERROR":"last height is %s and this height is %s" % (i.height,self.height)}
+        if self.patient.assessments.count() > 0:
+            last_assessment = self.patient.assessments[0]
+            if last_assessment.height > self.height: return {"ERROR":"last height is %s and this height is %s" % (last_assessment.height,self.height)}
         return resp
         
+    def cancel(self):
+        self.status = 'C'
+        self.save()

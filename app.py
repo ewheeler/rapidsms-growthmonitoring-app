@@ -11,6 +11,7 @@ from rapidsms.message import Message
 from logger.models import * 
 from rapidsms.connection import Connection
 from rapidsms.parsers.keyworder import * 
+from people.models import PersonType
 from  models import * 
 import messages
 import time
@@ -37,6 +38,7 @@ class App(rapidsms.app.App):
                     # attempt to match tokens in this message
                     # using the keyworder parser
                     func, captures = self.kw.match(self, message.text.lower())
+                    self.debug(func)
                     func(self, message, *captures)
                     # short-circuit handler calls because 
                     # we are responding to this message
@@ -54,94 +56,125 @@ class App(rapidsms.app.App):
 	    #
             # self.error(e) 
 	    pass
-   
-
-    def __get_reporter(self,message,contact=""): #THIS SHOULD BE IN REPORTER CLASS
-        conn = PersistantConnection.from_message(message)
-        if contact != "":
-                conn.identity = contact
-                conn.save
-        else:
-            contact = "%d" % time.mktime(datetime.datetime.now())
-        if conn.reporter is null: 
-            reporter = Reporter(alias=contact,last_name  = contact)
-            reporter.save()
-        conn.reporter = reporter
-        conn.save()
-        return conn.reporter
 
 
+    def __get_or_create_healthworker(self, msg, interviewer_id, name=None, lang='fr'):
+        self.debug("finding worker...")
+        if hasattr(msg, "reporter"):
+            self.debug("REPORTER PRESENT")
+            try:
+                # if healthworker is already registered return him/her
+                self.debug(interviewer_id)
+                healthworker = HealthWorker.objects.get(interviewer_id=interviewer_id)
+            except ObjectDoesNotExist:
+                #self.debug(e)
+                self.debug("no healthworker")
+                try:
+                    # parse the name, and create a healthworker/reporter
+                    alias, first, last = Reporter.parse_name(name)
+                    healthworker = HealthWorker(
+                        first_name=first, last_name=last,
+                        interviewer_id=interviewer_id, registered_self=True,
+                        message_count=1, language=lang)
+                    healthworker.save()
 
-    def __find_patient(self, cluster, household, code):
-        try:
-            params = {}
-            params["person__code"] = "\"%s\"" % code
-            params["person__location"] = "\"%s\"" %  cluster
-            params["person__location"] = "\"%s\"" %  household
-            cp = ChildPatient.objects.get(**params)
-            #cp.ts = datetime.datetime.now()
-            return {"PATIENT:":cp}
-        except:
-            return {"ERROR": "NO RECORD FOR child %s in household  %s in cluster %s" % (child,gmc)}
-    
-    def __find_worker(self, gmc,id,order="ts"):
-        try:
-            params = {}
-            params["person__short_id"] = "\"%s\"" % id 
-            params["person__location"] = "\"%s\"" %  gmc 
-            hw = HealthWorker.objects.filter(**params).orderby("\"%s\"" % order)[0]
-            hw.ts = datetime.datetime.now()
-            hw.message_count  = hw.message_count+1
-            return {"WORKER:":hw}
-        except:
-            return {"ERROR": "NO RECORD FOR HSA %s at gmc %s" % (child,gmc)}
+                    # attach the reporter to the current connection
+                    msg.persistant_connection.reporter = healthworker
+                    msg.persistant_connection.save()
+
+                    return healthworker, True
+
+                # something went wrong - at the
+                # moment, we don't care what
+                except Exception, e:
+                    self.debug(e)
+            self.debug("trouble")
         
+    def __get_or_create_patient(self, **kwargs):
+        self.debug("finding patient...")
+        # Person model requires a PersonType, rather than rock the boat and
+        # alter how People work, make sure that a Patient PersonType exists.
+        # Also this seems sensible if this code gets refactored it will be
+        # easier to port old data...
+        person_type, created = PersonType.objects.get_or_create(singular='Patient', plural='Patients')
+        kwargs.update({'type' : person_type})
+        patient, created  = Patient.objects.get_or_create(**kwargs)
+        return patient, created
         
+
     # Report 9 from outer space
     @kw("help (.+?)")
     def help(self, message, more=None):
         respond(message,{"OK":SMS_RESPONSE["HELP"]})
 
 
-    @kw("report (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?)")  #we dont need gmc
-    def report(self, message, gmc, hsa, child, wt, ht, muac, oedema, diarrhea):
-        resp = {}
+    kw.prefix = ['report', 'rep']
+    @kw("(.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?)") 
+    def report(self, message, interviewer, cluster, household, child, gender, bday, age, weight, height, muac, oedema):
+        self.debug("reporting...")
         try:
-            p = self.__find_patient(gmc,child)
-            w = self.__find_worker(gmc,hsa)
+            # find out who is submitting this report
+            healthworker, created = self.__get_or_create_healthworker(message, interviewer)
+        except Exception, e:
+            self.debug(e)
+        self.debug(healthworker)
+        # TODO this is silly. move to reporters? logger? count logged messages?
+        healthworker.message_count  = healthworker.message_count+1
+        if created:
+            # halt reporting process and tell sender to register first
+            return message.respond("Please register before submitting survey: Send the word REGISTER followed by your Interviewer ID and your full name.")
 
-            hw.message_count  = hw.message_count+1
-            ind = Indicator(health_worker=w["WORKER"], child_patient=p["PATIENT"], height=ht, weight=wt, muac=muac,oedema=oedema,diarrea=diarrea)
-            ind.calcStatus()
-            resp = ind.verify()
+        try:
+            self.debug("getting patient...")
+            # find patient or create a new one
+            # TODO perform this with only a subset of this info? we dont want to
+            # erroneously create a new patient if one of these is incorrect
+            patient, created = self.__get_or_create_patient(cluster_id=cluster,\
+                household_id=household, gender=gender, code=child)
+            # update bday separately (see above TODO)
+            patient.date_of_birth = bday
+            # update age separately (should be the only volitile piece of info)
+            patient.age_in_months = age
+            patient.save()
 
-            if ("ERROR" in response):
-                hw.errors = hw.errors + 1
-                hw.save()
+            self.debug("making assessment...")
+            # create nutritional assessment entry
+            ass = Assessment(healthworker=healthworker, patient=patient,\
+                    height=height, weight=weight, muac=muac, oedema=oedema)
+            # perform analysis
+            # TODO add to save method
+            ass.analyze()
+            results = ass.verify()
+
+            if ("ERROR" in results):
+                self.debug("error in result")
+                healthworker.errors = healthworker.errors + 1
+                healthworker.save()
             else:
                 try:
-                    ind.save()
-                    cp.save()
+                    ass.save()
                 except Exception,save_err:
+                    self.debug("error saving")
                     resp ={"ERROR": save_err}
-                    hw.errors = hw.errors + 1
-                    hw.save()
+                    healthworker.errors = healthworker.errors + 1
+                    healthworker.save()
 
-            resp["OK"] = "Thank you. You reported height=%s weight=%s muac=%s oedema=%s diarrhea=% : CHILD STATUS = %s" %(ind.height,ind.weight,ind.muac,ind.oedema,ind.diarrea, cp.status)
+            message.respond("Thank you, %s. Received height=%scm weight=%skg muac=%smm oedema=%s for Child ID %s (Household %s, Cluster %s)." % (healthworker.full_name(), ass.height, ass.weight, ass.muac, ass.oedema, patient.code, patient.household_id, patient.cluster_id))
         except Exception,e:
+            self.debug(e)
             resp["ERROR"] = "There was an error with your report - please check your measurements"
 
         respond(message, resp) 
         
     
     @kw("cancel (.*?) (.*?)")
-    def cancel(self, message, gmc,child):
+    def cancel_report(self, message, cluster, household, child):
         resp = {}
         try: 
-        
-            w = self.__find_child(gmc,child,"ts")
-            ind = Indicator.objects.filter(child_patient=w).orderby("ts")[0]
-            ind.delete()
+            patient = Patient.objects.get(cluster_id=cluster,\
+                        household_id=household, code=child)
+            ass = patient.assessments[0] 
+            ass.cancel()
             resp["OK"] = "CANCELED report for child %s at gmc %s" % (child,gmc)
         except Exception,e:
             resp["ERROR"] = "UNABLE TO CANCEL REPORT for child %s at gmc %" % (child, gmc)
@@ -149,21 +182,36 @@ class App(rapidsms.app.App):
         respond(message,resp) 
     
 
-    @kw("register (.*?) (.*?)\?(.*?)\?(.*?)")
-    def register_healthworker(self, message, gmc, hsa,oldgmc="",oldhsa=""):
-        resp = {}
+    kw.prefix = ['register', 'reg']
+    @kw("(\d+?) (.*?)")
+    def register_healthworker(self, message, code, name):
+        self.debug("register...")
         try:
-            reporter = self.__get_reporter(message)
-            if oldgmc !="":
-                 person = person.objects.filter(location=oldgmc,short_id=oldhsa)[0]
-                 person.short_id  =hsa
-                 person.location = gmc
-            else:   
-                person = Person(reporter=reporter, location=gmc, short_id=hsa)
-            person.save()
-            hw = HealthWorker(person=person)
-            hw.save()
-            resp["OK"] = "ADDED HSA %s for %s" % (short_id, location)
-        except:
-            resp["ERROR"] = "UNABLE TO ADD  %s for %s" % (short_id, location)
-        respond(message,resp) 
+            healthworker, created = self.__get_or_create_healthworker(message, code, name)
+            if created:
+                message.respond("Hello %s, thanks for registering as Interviewer ID %s!" % (healthworker.full_name(), healthworker.alias))
+            else:
+                message.respond("Hello again, %s. " % (healthworker.full_name()))
+                message.respond("To register a different interviewer for this ID, please first text REMOVE followed by the interviewer ID.")
+        except Exception, e:
+            self.debug("oops!")
+            self.debug(e)
+            pass
+
+    def remove_healthworker(self, message, code):
+        self.debug("removing...")
+        healthworker, created = self.__get_or_create_healthworker(message, code)
+        try:
+            if not created:
+                healthworker.status = 'I'
+                healthworker.save()
+                message.respond("%s has been removed from Interviewer ID %s" % (healthworker.full_name(), healthworker.alias))
+                message.respond("To register a new person as Interviewer ID %s, text REGISTER followed by %s and a new name." % (healthworker.alias, healthworker.alias))
+                # TODO shameful hack alert! shameful hack alert!
+                # reporter aliases must be unique, and its easier to use alias
+                # than add a healthworker id field to healthworker.
+                # i will most certainly regret this in the future
+                healthworker.alias = int(healthworker.alias) + 30000
+                healthworker.save()
+        except Exception, e:
+            self.debug(e)
