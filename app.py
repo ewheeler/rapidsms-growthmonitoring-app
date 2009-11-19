@@ -12,7 +12,8 @@ from logger.models import *
 from rapidsms.connection import Connection
 from rapidsms.parsers.keyworder import * 
 from people.models import PersonType
-from  models import * 
+from childhealth.utils import *
+from  childhealth.models import * 
 import messages
 import time
 
@@ -20,6 +21,14 @@ class App(rapidsms.app.App):
 
     # lets use the Keyworder parser!
     kw = Keyworder()
+
+    # patterns for dates
+    datesep = r"(\.|\/|\\|\-)"
+    date = r"\d\d?"
+    month = r"\d\d?"
+    year = r"\d{2}(\d{2})?"
+    # expecting YYYY-MM-DD, YY-MM-DD, or YY-M-D, etc
+    datepattern = r"^\d{2}(\d{2})?[\.|\/|\\|\-]\d\d?[\.|\/|\\|\-]\d\d?$"
 
     def parse(self, message):
         self.handled = False 
@@ -88,8 +97,10 @@ class App(rapidsms.app.App):
                 # moment, we don't care what
                 except Exception, e:
                     self.debug(e)
-            self.debug("trouble")
+            self.debug("existing healthworker")
+            return healthworker, False
         
+
     def __get_or_create_patient(self, **kwargs):
         self.debug("finding patient...")
         # Person model requires a PersonType, rather than rock the boat and
@@ -98,8 +109,42 @@ class App(rapidsms.app.App):
         # easier to port old data...
         person_type, created = PersonType.objects.get_or_create(singular='Patient', plural='Patients')
         kwargs.update({'type' : person_type})
-        patient, created  = Patient.objects.get_or_create(**kwargs)
-        return patient, created
+        try:
+            # first try to look up patient using only id
+            # we don't want to use bday and gender in case this is an update
+            # or correction to an already known patient (get_or_create would make
+            # a new patient)
+            patient_args = kwargs
+            self.debug(patient_args)
+            ids = ['code', 'cluster_id', 'household_id']
+            has_ids = [patient_args.has_key(id) for id in ids]
+            self.debug(has_ids)
+            if False not in has_ids:
+                id_kwargs = {}
+                [id_kwargs.update({id : patient_args.pop(id)}) for id in ids]
+                self.debug(id_kwargs)
+                patient = Patient.objects.get(**id_kwargs)
+                # compare reported gender and bday to data on file
+                # and update + notify if necessary
+                bday_on_file = patient.date_of_birth
+                gender_on_file = patient.gender
+                if patient_args.has_key('gender'):
+                    reported_gender = patient_args.get('gender')
+                    if gender_on_file != reported_gender:
+                        patient.gender = reported_gender
+                        patient.save()
+                        message.respond("Reported gender '%s' for Child ID %s does not match previosly reported gender=%s" % (reported_gender, gender_on_file))
+                if patient_args.has_key('date_of_birth'):
+                    reported_bay = patient_args.get('date_of_birth')
+                    if bday_on_file != reported_bday:
+                        patient.date_of_birth = reported_bday
+                        patient.save()
+                        message.respond("Reported date of birth '%s' for Child ID %s does not match previosly reported DOB=%s" % (reported_bday, bday_on_file))
+                return patient, False
+        except ObjectDoesNotExist, IndexError:
+            # patient doesnt already exist, so create with all arguments
+            patient, created  = Patient.objects.get_or_create(**kwargs)
+            return patient, created 
         
 
     # Report 9 from outer space
@@ -107,11 +152,55 @@ class App(rapidsms.app.App):
     def help(self, message, more=None):
         respond(message,{"OK":SMS_RESPONSE["HELP"]})
 
+    def hot_date(self, potential_date):
+        self.debug("hot date...")
+        self.debug(potential_date)
+        matches = re.match( self.datepattern, potential_date, re.IGNORECASE)
+        self.debug(matches)
+        if matches is not None:
+            date = matches.group(0)
+            self.debug(date)
+            dob = util.get_good_date(date)
+            self.debug(dob)
+            return dob
+        else:
+            return None
+
+    def good_sex(self, potential_sex):
+        self.debug("good sex...")
+        self.debug(potential_sex)
+        gender = util.get_good_sex(potential_sex)
+        if gender is not None:
+            return gender
+
+    def validate_ids(self, id_dict):
+        self.debug("validate ids...")
+        valid_ids = {}
+        invalid_ids = {}
+        for k,v in id_dict.iteritems():
+            # TODO check more than the first digit?
+            if v[0].isdigit():
+                valid_ids.update({k:v})
+            else:
+                invalid_ids.update({k:v})
+        return valid_ids, invalid_ids
+                
+            
 
     kw.prefix = ['report', 'rep']
     @kw("(.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?)") 
     def report(self, message, interviewer, cluster, household, child, gender, bday, age, weight, height, muac, oedema):
         self.debug("reporting...")
+
+        # check that all three id codes are numbers
+        valid_ids, invalid_ids = self.validate_ids({'interviewer' : interviewer,\
+            'cluster' : cluster, 'household' : household, 'child' : child})
+        # send responses for each invalid id, if any
+        if len(invalid_ids) > 0:
+            for k,v in invalid_ids.iteritems():
+                message.respond("Sorry, ID code '%s' is not valid for a %s" % (v, k))
+            # halt reporting process if any of the id codes are invalid
+            return True
         try:
             # find out who is submitting this report
             healthworker, created = self.__get_or_create_healthworker(message, interviewer)
@@ -126,16 +215,44 @@ class App(rapidsms.app.App):
 
         try:
             self.debug("getting patient...")
+            # begin collecting valid patient arguments
+            patient_kwargs = {'cluster_id' : cluster, 'household_id' :\
+                household, 'code' : child}
+
+            # make sure bday is valid
+            dob_str, dob_obj = self.hot_date(bday)
+            if dob_obj is not None:
+                self.debug(dob_obj)
+                patient_kwargs.update({'date_of_birth' : dob_obj})
+            else:
+                patient_kwargs.update({'date_of_birth' : ""}) 
+                message.respond("Sorry I don't understand '%s' as a child's date of birth. Please use YYYY-MM-DD" % (bday))
+
+            # make sure reported gender is valid
+            good_sex = self.good_sex(gender)
+            if good_sex is not None:
+                self.debug(good_sex)
+                patient_kwargs.update({'gender' : good_sex})
+            else:
+                patient_kwargs.update({'gender' : ""}) 
+                message.respond("Sorry I don't understand '%s' as a child's gender. Please use M for male or F for female." % (gender))
+
             # find patient or create a new one
-            # TODO perform this with only a subset of this info? we dont want to
-            # erroneously create a new patient if one of these is incorrect
-            patient, created = self.__get_or_create_patient(cluster_id=cluster,\
-                household_id=household, gender=gender, code=child)
-            # update bday separately (see above TODO)
-            patient.date_of_birth = bday
+            patient, created = self.__get_or_create_patient(**patient_kwargs)
+
             # update age separately (should be the only volitile piece of info)
+            self.debug(age)
             patient.age_in_months = age
             patient.save()
+
+            # calculate age based on reported date of birth
+            # respond if calcualted age differs from reported age
+            # by more than 3 months TODO make this configurable
+            self.debug("getting sloppy age...")
+            sloppy_age_in_months = util.sloppy_date_to_age_in_months(patient.date_of_birth)
+            self.debug(sloppy_age_in_months)
+            if (abs(int(sloppy_age_in_months) - int(patient.age_in_months)) > 3):
+                message.respond("Date of birth indicates Child ID %s's age (in months) is %s, which does not match the reported age (in months) of %s." % (patient.code, sloppy_age_in_months, patient.age_in_months))
 
             self.debug("making assessment...")
             # create nutritional assessment entry
@@ -146,6 +263,8 @@ class App(rapidsms.app.App):
             ass.analyze()
             results = ass.verify()
 
+            # TODO find another way to do this, we don't want to log errors
+            # for buggy code, etc
             if ("ERROR" in results):
                 self.debug("error in result")
                 healthworker.errors = healthworker.errors + 1
@@ -159,7 +278,7 @@ class App(rapidsms.app.App):
                     healthworker.errors = healthworker.errors + 1
                     healthworker.save()
 
-            message.respond("Thank you, %s. Received height=%scm weight=%skg muac=%smm oedema=%s for Child ID %s (Household %s, Cluster %s)." % (healthworker.full_name(), ass.height, ass.weight, ass.muac, ass.oedema, patient.code, patient.household_id, patient.cluster_id))
+            message.respond("Thank you, %s. Received height=%scm weight=%skg muac=%smm oedema=%s for Child ID %s gender=%s (Household %s, Cluster %s), DOB=%s age=%sm." % (healthworker.full_name(), ass.height, ass.weight, ass.muac, ass.oedema, patient.code, patient.gender, patient.household_id, patient.cluster_id, patient.date_of_birth, patient.age_in_months))
         except Exception,e:
             self.debug(e)
             resp["ERROR"] = "There was an error with your report - please check your measurements"
@@ -167,19 +286,20 @@ class App(rapidsms.app.App):
         respond(message, resp) 
         
     
-    @kw("cancel (.*?) (.*?)")
-    def cancel_report(self, message, cluster, household, child):
-        resp = {}
+    kw.prefix = ['cancel', 'can']
+    @kw("(\d+?) (\d+?) (\d+?)")
+    def cancel_report(self, message, child, household, cluster):
         try: 
             patient = Patient.objects.get(cluster_id=cluster,\
                         household_id=household, code=child)
             ass = patient.assessments[0] 
-            ass.cancel()
-            resp["OK"] = "CANCELED report for child %s at gmc %s" % (child,gmc)
-        except Exception,e:
-            resp["ERROR"] = "UNABLE TO CANCEL REPORT for child %s at gmc %" % (child, gmc)
-        
-        respond(message,resp) 
+            if ass is not None:
+                ass.cancel()
+                message.respond("CANCELLED report submitted by %s (ID %s) on %s for Child ID %s (Household %s, Cluster %s)" % (ass.healthworker.full_name(), ass.healthworker.interviewer_id, ass.date, patient.code, patient.household_id, patient.cluster_id))
+            else:
+                message.respond("Sorry, unable to locate report for Child ID %s (Household %s, Cluster %s)" % (child, household, cluster))
+        except ObjectDoesNotExist:
+            message.respond("Sorry, unable to locate report for Child ID %s (Household %s, Cluster %s)" % (child, household, cluster))
     
 
     kw.prefix = ['register', 'reg']
@@ -189,7 +309,7 @@ class App(rapidsms.app.App):
         try:
             healthworker, created = self.__get_or_create_healthworker(message, code, name)
             if created:
-                message.respond("Hello %s, thanks for registering as Interviewer ID %s!" % (healthworker.full_name(), healthworker.alias))
+                message.respond("Hello %s, thanks for registering as Interviewer ID %s!" % (healthworker.full_name(), healthworker.interviewer_id))
             else:
                 message.respond("Hello again, %s. " % (healthworker.full_name()))
                 message.respond("To register a different interviewer for this ID, please first text REMOVE followed by the interviewer ID.")
@@ -205,13 +325,9 @@ class App(rapidsms.app.App):
             if not created:
                 healthworker.status = 'I'
                 healthworker.save()
-                message.respond("%s has been removed from Interviewer ID %s" % (healthworker.full_name(), healthworker.alias))
-                message.respond("To register a new person as Interviewer ID %s, text REGISTER followed by %s and a new name." % (healthworker.alias, healthworker.alias))
-                # TODO shameful hack alert! shameful hack alert!
-                # reporter aliases must be unique, and its easier to use alias
-                # than add a healthworker id field to healthworker.
-                # i will most certainly regret this in the future
-                healthworker.alias = int(healthworker.alias) + 30000
+                message.respond("%s has been removed from Interviewer ID %s" % (healthworker.full_name(), healthworker.interviewer_id))
+                message.respond("To register a new person as Interviewer ID %s, text REGISTER followed by %s and a new name." % (healthworker.interviewer_id, healthworker.interviewer_id))
+                healthworker.interviewer_id = None 
                 healthworker.save()
         except Exception, e:
             self.debug(e)
