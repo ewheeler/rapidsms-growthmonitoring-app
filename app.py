@@ -2,20 +2,21 @@
 # vim: ai ts=4 sts=4 et sw=4
 
 from datetime import date, datetime
+import time
 
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.db.models import F
 
 import rapidsms
 from rapidsms.message import Message
-from logger.models import * 
 from rapidsms.connection import Connection
-from rapidsms.parsers.keyworder import * 
+from rapidsms.parsers.keyworder import *
+
+from logger.models import *
 from people.models import PersonType
 from childhealth.utils import *
-from  childhealth.models import * 
+from childhealth.models import *
 import messages
-import time
 
 class App(rapidsms.app.App):
 
@@ -36,7 +37,7 @@ class App(rapidsms.app.App):
     def respond(message,log={}):
         key = "OK"
         if "ERROR" in log: key = "ERROR"
-        
+
         message.respond(log[key])
 
     def handle(self, message):
@@ -51,7 +52,7 @@ class App(rapidsms.app.App):
                     func(self, message, *captures)
                     # short-circuit handler calls because 
                     # we are responding to this message
-                    return self.handled 
+                    return self.handled
                 except Exception, e:
                     # TODO only except NoneType error
                     # nothing was found, use default handler
@@ -99,7 +100,7 @@ class App(rapidsms.app.App):
                     self.debug(e)
             self.debug("existing healthworker")
             return healthworker, False
-        
+
 
     def __get_or_create_patient(self, **kwargs):
         self.debug("finding patient...")
@@ -144,8 +145,8 @@ class App(rapidsms.app.App):
         except ObjectDoesNotExist, IndexError:
             # patient doesnt already exist, so create with all arguments
             patient, created  = Patient.objects.get_or_create(**kwargs)
-            return patient, created 
-        
+            return patient, created
+
 
     # Report 9 from outer space
     @kw("help (.+?)")
@@ -184,11 +185,11 @@ class App(rapidsms.app.App):
             else:
                 invalid_ids.update({k:v})
         return valid_ids, invalid_ids
-                
-            
+
+
 
     kw.prefix = ['report', 'rep']
-    @kw("(.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?)") 
+    @kw("(.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?)")
     def report(self, message, interviewer, cluster, household, child, gender, bday, age, weight, height, muac, oedema):
         self.debug("reporting...")
 
@@ -225,7 +226,7 @@ class App(rapidsms.app.App):
                 self.debug(dob_obj)
                 patient_kwargs.update({'date_of_birth' : dob_obj})
             else:
-                patient_kwargs.update({'date_of_birth' : ""}) 
+                patient_kwargs.update({'date_of_birth' : ""})
                 message.respond("Sorry I don't understand '%s' as a child's date of birth. Please use YYYY-MM-DD" % (bday))
 
             # make sure reported gender is valid
@@ -283,16 +284,16 @@ class App(rapidsms.app.App):
             self.debug(e)
             resp["ERROR"] = "There was an error with your report - please check your measurements"
 
-        respond(message, resp) 
-        
-    
+        respond(message, resp)
+
+
     kw.prefix = ['cancel', 'can']
     @kw("(\d+?) (\d+?) (\d+?)")
     def cancel_report(self, message, child, household, cluster):
-        try: 
+        try:
             patient = Patient.objects.get(cluster_id=cluster,\
                         household_id=household, code=child)
-            ass = patient.assessments[0] 
+            ass = patient.assessments[0]
             if ass is not None:
                 ass.cancel()
                 message.respond("CANCELLED report submitted by %s (ID %s) on %s for Child ID %s (Household %s, Cluster %s)" % (ass.healthworker.full_name(), ass.healthworker.interviewer_id, ass.date, patient.code, patient.household_id, patient.cluster_id))
@@ -300,7 +301,7 @@ class App(rapidsms.app.App):
                 message.respond("Sorry, unable to locate report for Child ID %s (Household %s, Cluster %s)" % (child, household, cluster))
         except ObjectDoesNotExist:
             message.respond("Sorry, unable to locate report for Child ID %s (Household %s, Cluster %s)" % (child, household, cluster))
-    
+
 
     kw.prefix = ['register', 'reg']
     @kw("(\d+?) (.*?)")
