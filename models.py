@@ -58,7 +58,8 @@ class Assessment(models.Model):
     ASS_STATUS_CHOICES = (
         ('C', 'Cancelled'),
         ('G', 'Good'),
-        ('B', 'Bad'),
+        ('B', 'Baseline'),
+        ('S', 'Suspect'),
     )
 
     # who what where when why

@@ -102,7 +102,7 @@ class App(rapidsms.app.App):
             return healthworker, False
 
 
-    def __get_or_create_patient(self, **kwargs):
+    def __get_or_create_patient(self, message, **kwargs):
         self.debug("finding patient...")
         # Person model requires a PersonType, rather than rock the boat and
         # alter how People work, make sure that a Patient PersonType exists.
@@ -115,16 +115,19 @@ class App(rapidsms.app.App):
             # we don't want to use bday and gender in case this is an update
             # or correction to an already known patient (get_or_create would make
             # a new patient)
-            patient_args = kwargs
+            patient_args = kwargs.copy()
             self.debug(patient_args)
             ids = ['code', 'cluster_id', 'household_id']
             has_ids = [patient_args.has_key(id) for id in ids]
             self.debug(has_ids)
             if False not in has_ids:
+                self.debug("has ids...")
                 id_kwargs = {}
                 [id_kwargs.update({id : patient_args.pop(id)}) for id in ids]
                 self.debug(id_kwargs)
+                # next line should bump us into the exception if we have a new kid
                 patient = Patient.objects.get(**id_kwargs)
+                self.debug("patient!")
                 # compare reported gender and bday to data on file
                 # and update + notify if necessary
                 bday_on_file = patient.date_of_birth
@@ -134,16 +137,17 @@ class App(rapidsms.app.App):
                     if gender_on_file != reported_gender:
                         patient.gender = reported_gender
                         patient.save()
-                        message.respond("Reported gender '%s' for Child ID %s does not match previosly reported gender=%s" % (reported_gender, gender_on_file))
+                        message.respond("Reported gender '%s' for Child ID %s does not match previosly reported gender=%s" % (reported_gender, patient.code, gender_on_file))
                 if patient_args.has_key('date_of_birth'):
-                    reported_bay = patient_args.get('date_of_birth')
+                    reported_bday = patient_args.get('date_of_birth')
                     if bday_on_file != reported_bday:
                         patient.date_of_birth = reported_bday
                         patient.save()
-                        message.respond("Reported date of birth '%s' for Child ID %s does not match previosly reported DOB=%s" % (reported_bday, bday_on_file))
+                        message.respond("Reported date of birth '%s' for Child ID %s does not match previosly reported DOB=%s" % (reported_bday, patient.code, bday_on_file))
                 return patient, False
         except ObjectDoesNotExist, IndexError:
             # patient doesnt already exist, so create with all arguments
+            self.debug("new patient!")
             patient, created  = Patient.objects.get_or_create(**kwargs)
             return patient, created
 
@@ -153,7 +157,7 @@ class App(rapidsms.app.App):
     def help(self, message, more=None):
         respond(message,{"OK":SMS_RESPONSE["HELP"]})
 
-    def hot_date(self, potential_date):
+    def good_date(self, potential_date):
         self.debug("hot date...")
         self.debug(potential_date)
         matches = re.match( self.datepattern, potential_date, re.IGNORECASE)
@@ -161,11 +165,11 @@ class App(rapidsms.app.App):
         if matches is not None:
             date = matches.group(0)
             self.debug(date)
-            dob = util.get_good_date(date)
-            self.debug(dob)
-            return dob
+            good_date_str, good_date_obj = util.get_good_date(date)
+            self.debug(good_date_str)
+            return good_date_str, good_date_obj 
         else:
-            return None
+            return None, None
 
     def good_sex(self, potential_sex):
         self.debug("good sex...")
@@ -173,6 +177,8 @@ class App(rapidsms.app.App):
         gender = util.get_good_sex(potential_sex)
         if gender is not None:
             return gender
+        else:
+            return None
 
     def validate_ids(self, id_dict):
         self.debug("validate ids...")
@@ -221,7 +227,7 @@ class App(rapidsms.app.App):
                 household, 'code' : child}
 
             # make sure bday is valid
-            dob_str, dob_obj = self.hot_date(bday)
+            dob_str, dob_obj = self.good_date(bday)
             if dob_obj is not None:
                 self.debug(dob_obj)
                 patient_kwargs.update({'date_of_birth' : dob_obj})
@@ -239,7 +245,8 @@ class App(rapidsms.app.App):
                 message.respond("Sorry I don't understand '%s' as a child's gender. Please use M for male or F for female." % (gender))
 
             # find patient or create a new one
-            patient, created = self.__get_or_create_patient(**patient_kwargs)
+            self.debug(patient_kwargs)
+            patient, created = self.__get_or_create_patient(message, **patient_kwargs)
 
             # update age separately (should be the only volitile piece of info)
             self.debug(age)
@@ -253,7 +260,7 @@ class App(rapidsms.app.App):
             sloppy_age_in_months = util.sloppy_date_to_age_in_months(patient.date_of_birth)
             self.debug(sloppy_age_in_months)
             if (abs(int(sloppy_age_in_months) - int(patient.age_in_months)) > 3):
-                message.respond("Date of birth indicates Child ID %s's age (in months) is %s, which does not match the reported age (in months) of %s." % (patient.code, sloppy_age_in_months, patient.age_in_months))
+                message.respond("Date of birth indicates Child ID %s's age (in months) is %s, which does not match the reported age (in months) of %s" % (patient.code, sloppy_age_in_months, patient.age_in_months))
 
             self.debug("making assessment...")
             # create nutritional assessment entry
@@ -279,7 +286,7 @@ class App(rapidsms.app.App):
                     healthworker.errors = healthworker.errors + 1
                     healthworker.save()
 
-            message.respond("Thank you, %s. Received height=%scm weight=%skg muac=%smm oedema=%s for Child ID %s gender=%s (Household %s, Cluster %s), DOB=%s age=%sm." % (healthworker.full_name(), ass.height, ass.weight, ass.muac, ass.oedema, patient.code, patient.gender, patient.household_id, patient.cluster_id, patient.date_of_birth, patient.age_in_months))
+            message.respond("Thanks, %s. Received height=%scm weight=%skg MUAC=%smm oedema=%s for Child ID=%s Household=%s Cluster=%s gender=%s DOB=%s age=%sm" % (healthworker.full_name(), ass.height, ass.weight, ass.muac, ass.oedema, patient.code, patient.household_id, patient.cluster_id, patient.gender, patient.date_of_birth, patient.age_in_months))
         except Exception,e:
             self.debug(e)
             resp["ERROR"] = "There was an error with your report - please check your measurements"
