@@ -10,6 +10,7 @@ from locations.models import Location
 from reporters.models import Reporter
 from people.models import Person
 
+from childhealth.utils import *
 from messages import *
    
 class HealthWorker(Reporter):
@@ -41,6 +42,10 @@ class Patient(Person):
     def assessments(self):
         # returns patient's GOOD assessments
         return Assessment.objects.filter(patient=self.patient, status='G').order_by('-patient__last_updated')
+
+    @property
+    def age_in_months_from_date_of_birth(self):
+        return util.sloppy_date_to_age_in_months(self.date_of_birth)
 
     def __unicode__(self):
         return "Child %s, Household %s, Cluster %s" % (self.code, self.household_id, self.cluster_id)
