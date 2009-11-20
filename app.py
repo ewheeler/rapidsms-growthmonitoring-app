@@ -196,7 +196,7 @@ class App(rapidsms.app.App):
 
     kw.prefix = ['report', 'rep']
     @kw("(.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?)")
-    def report(self, message, interviewer, cluster, household, child, gender, bday, age, weight, height, muac, oedema):
+    def report(self, message, interviewer, cluster, child, household, gender, bday, age, weight, height, oedema, muac):
         self.debug("reporting...")
 
         # check that all three id codes are numbers
@@ -256,11 +256,11 @@ class App(rapidsms.app.App):
             # calculate age based on reported date of birth
             # respond if calcualted age differs from reported age
             # by more than 3 months TODO make this configurable
-            self.debug("getting sloppy age...")
-            sloppy_age_in_months = util.sloppy_date_to_age_in_months(patient.date_of_birth)
-            self.debug(sloppy_age_in_months)
-            if (abs(int(sloppy_age_in_months) - int(patient.age_in_months)) > 3):
-                message.respond("Date of birth indicates Child ID %s's age (in months) is %s, which does not match the reported age (in months) of %s" % (patient.code, sloppy_age_in_months, patient.age_in_months))
+            #self.debug("getting sloppy age...")
+            #sloppy_age_in_months = util.sloppy_date_to_age_in_months(patient.date_of_birth)
+            #self.debug(sloppy_age_in_months)
+            #if (abs(int(sloppy_age_in_months) - int(patient.age_in_months)) > 3):
+            #    message.respond("Date of birth indicates Child ID %s's age (in months) is %s, which does not match the reported age (in months) of %s" % (patient.code, sloppy_age_in_months, patient.age_in_months))
 
             self.debug("making assessment...")
             # create nutritional assessment entry
@@ -286,7 +286,20 @@ class App(rapidsms.app.App):
                     healthworker.errors = healthworker.errors + 1
                     healthworker.save()
 
-            message.respond("Thanks, %s. Received height=%scm weight=%skg MUAC=%smm oedema=%s for Child ID=%s Household=%s Cluster=%s gender=%s DOB=%s age=%sm" % (healthworker.full_name(), ass.height, ass.weight, ass.muac, ass.oedema, patient.code, patient.household_id, patient.cluster_id, patient.gender, patient.date_of_birth, patient.age_in_months))
+		data = [
+			"ClusterID=%s"      % (patient.cluster_id or "??"),
+			"ChildID=%s"        % (patient.code or "??"),
+			"HouseholdID=%s"    % (patient.household_id or "??"),
+			"gender=%s"         % (patient.gender or "??"),
+			"DOB=%s"            % (patient.date_of_birth or "??"),
+			"age=%s"            % (patient.age_in_months or "??"),
+			"height=%s"         % (ass.height or "??"),
+			"weight=%s"         % (ass.weight or "??"),
+			"oedema=%s"         % (ass.oedema or "??"),
+			"MUAC=%s"           % (ass.muac or "??")]
+
+            confirmation = "Thanks, %s. Received %s" %\
+                (healthworker.full_name(), " ".join(data))
         except Exception,e:
             self.debug(e)
             resp["ERROR"] = "There was an error with your report - please check your measurements"

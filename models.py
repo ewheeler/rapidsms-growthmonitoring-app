@@ -122,3 +122,29 @@ class Assessment(models.Model):
     def cancel(self):
         self.status = 'C'
         self.save()
+
+class SurveyEntry(models.Model): 
+    FLAG_CHOICES = (
+        ('C', 'Cancelled'),
+        ('G', 'Good'),
+        ('B', 'Baseline'),
+        ('S', 'Suspect'),
+    )
+
+    flag = models.CharField(max_length=1,choices=FLAG_CHOICES,default='G')
+
+    # who what where when why
+    survey_date         = models.CharField(blank=True,null=True)
+    healthworker_id     = models.CharField(blank=True,null=True)
+    cluster_id          = models.CharField(blank=True,null=True)
+    child_id            = models.CharField(blank=True,null=True)
+    household_id        = models.CharField(blank=True,null=True)
+    sex                 = models.CharField(blank=True,null=True)
+    date_of_birth       = models.CharField(blank=True,null=True)
+    age_in_months       = models.CharField(blank=True,null=True)
+
+    # indicators
+    height              = models.CharField(blank=True,null=True)
+    weight              = models.CharField(blank=True,null=True)
+    oedema              = models.CharField(blank=True,null=True)
+    muac                = models.CharField(blank=True,null=True)
