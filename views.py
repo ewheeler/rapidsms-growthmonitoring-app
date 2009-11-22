@@ -29,6 +29,27 @@ from docmanager.models import *
 from displaymanager.models import *
 from models import *
 
+from utilities.export import export
+
+def index(req):
+    template_name="childhealth/index.html"
+    surveyentries = SurveyEntry.objects.order_by('survey_date')
+    all = []
+    [ all.append(entry) for entry in surveyentries]
+    # sort by date, descending
+    all.sort(lambda x, y: cmp(y.survey_date, x.survey_date))
+    context = {}
+    context['entries'] = paginated(req, all, per_page=50)
+    return render_to_response(req, template_name, context )
+
+def ass_dict():
+    pass
+
+def csv_entries(req, format='csv'):
+    context = {}
+    if req.user.is_authenticated():
+        return export(SurveyEntry.objects.all())
+    return export(SurveyEntry.objects.all(), ['Survey Date','Interviewer ID','Cluster ID','Child ID','Household ID', 'Sex', 'Date of Birth', 'Age', 'Height', 'Weight', 'Oedema', 'MUAC'])
 
 def to_js_date(dt):
     return 1000 * t.mktime(dt.timetuple())

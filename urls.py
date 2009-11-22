@@ -11,9 +11,11 @@ import views as v
 urlpatterns = patterns('',
     
     # mini dashboard for this app
-    url(r'^childhealth$',
-        v.dashboard),
-    
+    url(r'^childhealth/?$',
+        v.index),
+
+    url(r'^childhealth/csv/surveyentries?$', 
+        v.csv_entries),
 
     url(r'^childhealth/(?P<breadcrumbs>.*)\/?(?P<view>LocationType|Location)$',
         v.select_left),

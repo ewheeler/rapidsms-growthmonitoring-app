@@ -1,28 +1,51 @@
-{% extends "childhealth/base.html" %}
+{% extends base_template %}
+{% load i18n %}
+{% block title %}Survey Entries{% endblock %}
+{% block content %}
 
+<div class="module">
 
-		                    {% block bodyarea %}
-<table width="100%">
-    <tr>
-        <td valign="top" width="80%">
-            {% for t in text %}
-        <h3> {{ t.title }} </h3>
-        <p> {{ t.text }} </p>
-            <br>
-  {% endfor %}
-
-        </td>
-
-        <td width="*" valign="top">
-            {% if files %}
-            <h2>Documents</h2>
-            {% endif %}
-            {% for f in files %}
-            <a href="{% url download-file id=f.id %}">{{f.title.strip }}</a><br>
-            {% endfor %}
-        </td>
-    </tr>
-
+<h2>Raw Survey Entries</h2>  
+<table width="100%"> 
+    <thead>
+        <tr>
+            <th>Survey Date</th>
+            <th>Interviewer ID</th>
+            <th>Cluster ID</th>
+            <th>Child ID</th>
+            <th>Household ID</th>
+            <th>Sex</th>
+            <th>Date of Birth</th>
+            <th>Age</th>
+            <th>Height</th>
+            <th>Weight</th>
+            <th>Oedema</th>
+            <th>MUAC</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for entry in entries.object_list %}
+            <tr>
+                <td>{{entry.survey_date|date:"d-M-Y H:m:s"}}</td>
+                <td>{{entry.healthworker_id}}</td>
+                <td>{{entry.cluster_id}}</td>
+                <td>{{entry.child_id}}</td>
+                <td>{{entry.household_id}}</td>
+                <td>{{entry.sex}}</td>
+                <td>{{entry.date_of_birth}}</td>
+                <td>{{entry.age_in_months}}</td>
+                <td>{{entry.height}}</td>
+                <td>{{entry.weight}}</td>
+                <td>{{entry.oedema}}</td>
+                <td>{{entry.muac}}</td>
+            </tr>
+        {% endfor %}
+    </tbody>
 </table>
 
+<div class="toolbar">
+   	<a href="/childhealth/csv/surveyentries" class="export">{% trans "Export Survey Entries" %}</a>
+</div>
+
+</div>
 {% endblock %}
