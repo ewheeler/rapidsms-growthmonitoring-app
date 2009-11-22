@@ -63,7 +63,7 @@ class Assessment(models.Model):
     )
 
     # who what where when why
-    healthworker       = models.ForeignKey(HealthWorker,null=True)
+    healthworker        = models.ForeignKey(HealthWorker,null=True)
     patient             = models.ForeignKey(Patient)
     date                = models.DateTimeField(auto_now_add=True)
     status              = models.CharField(max_length=1,choices=ASS_STATUS_CHOICES,default='G')
@@ -114,9 +114,9 @@ class Assessment(models.Model):
 
     def verify(self): 
         resp = {}
-        if self.patient.assessments.count() > 0:
-            last_assessment = self.patient.assessments[0]
-            if last_assessment.height > self.height: return {"ERROR":"last height is %s and this height is %s" % (last_assessment.height,self.height)}
+        #if self.patient.assessments.count() > 0:
+        #    last_assessment = self.patient.assessments[0]
+        #    if last_assessment.height > self.height: return {"ERROR":"last height is %s and this height is %s" % (last_assessment.height,self.height)}
         return resp
         
     def cancel(self):
@@ -134,17 +134,17 @@ class SurveyEntry(models.Model):
     flag = models.CharField(max_length=1,choices=FLAG_CHOICES,default='G')
 
     # who what where when why
-    survey_date         = models.CharField(blank=True,null=True)
-    healthworker_id     = models.CharField(blank=True,null=True)
-    cluster_id          = models.CharField(blank=True,null=True)
-    child_id            = models.CharField(blank=True,null=True)
-    household_id        = models.CharField(blank=True,null=True)
-    sex                 = models.CharField(blank=True,null=True)
-    date_of_birth       = models.CharField(blank=True,null=True)
-    age_in_months       = models.CharField(blank=True,null=True)
+    survey_date         = models.DateTimeField(auto_now_add=True)
+    healthworker_id     = models.CharField(max_length=25,blank=True,null=True)
+    cluster_id          = models.CharField(max_length=25,blank=True,null=True)
+    child_id            = models.CharField(max_length=25,blank=True,null=True)
+    household_id        = models.CharField(max_length=25,blank=True,null=True)
+    sex                 = models.CharField(max_length=25,blank=True,null=True)
+    date_of_birth       = models.CharField(max_length=25,blank=True,null=True)
+    age_in_months       = models.CharField(max_length=25,blank=True,null=True)
 
     # indicators
-    height              = models.CharField(blank=True,null=True)
-    weight              = models.CharField(blank=True,null=True)
-    oedema              = models.CharField(blank=True,null=True)
-    muac                = models.CharField(blank=True,null=True)
+    height              = models.CharField(max_length=25,blank=True,null=True)
+    weight              = models.CharField(max_length=25,blank=True,null=True)
+    oedema              = models.CharField(max_length=15,blank=True,null=True)
+    muac                = models.CharField(max_length=15,blank=True,null=True)

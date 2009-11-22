@@ -23,4 +23,4 @@ class AssessmentAdmin(admin.ModelAdmin):
 admin.site.register(HealthWorker, HealthWorkerAdmin)
 admin.site.register(Patient, PatientAdmin)
 admin.site.register(Assessment, AssessmentAdmin)
-
+admin.site.register(SurveyEntry)
