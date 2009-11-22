@@ -199,6 +199,13 @@ class App(rapidsms.app.App):
     def report(self, message, interviewer, cluster, child, household, gender, bday, age, weight, height, oedema, muac):
         self.debug("reporting...")
 
+        # save record of survey submission before doing any processing
+        survey_entry = SurveyEntry(healthworker_id=interviewer,\
+            cluster_id=cluster, child_id=child, household_id=household,\
+            sex=gender, date_of_birth=bday, age_in_months=age, height=height,\
+            weight=weight, oedema=oedema, muac=muac)
+        survey_entry.save()
+
         # check that all three id codes are numbers
         valid_ids, invalid_ids = self.validate_ids({'interviewer' : interviewer,\
             'cluster' : cluster, 'household' : household, 'child' : child})
@@ -264,6 +271,10 @@ class App(rapidsms.app.App):
 
             self.debug("making assessment...")
             # create nutritional assessment entry
+            self.debug(height)
+            self.debug(weight)
+            self.debug(muac)
+
             ass = Assessment(healthworker=healthworker, patient=patient,\
                     height=height, weight=weight, muac=muac, oedema=oedema)
             # perform analysis
@@ -282,21 +293,22 @@ class App(rapidsms.app.App):
                     ass.save()
                 except Exception,save_err:
                     self.debug("error saving")
+                    self.debug(save_err)
                     resp ={"ERROR": save_err}
                     healthworker.errors = healthworker.errors + 1
                     healthworker.save()
 
-		data = [
-			"ClusterID=%s"      % (patient.cluster_id or "??"),
-			"ChildID=%s"        % (patient.code or "??"),
-			"HouseholdID=%s"    % (patient.household_id or "??"),
-			"gender=%s"         % (patient.gender or "??"),
-			"DOB=%s"            % (patient.date_of_birth or "??"),
-			"age=%s"            % (patient.age_in_months or "??"),
-			"height=%s"         % (ass.height or "??"),
-			"weight=%s"         % (ass.weight or "??"),
-			"oedema=%s"         % (ass.oedema or "??"),
-			"MUAC=%s"           % (ass.muac or "??")]
+            data = [
+                    "ClusterID=%s"      % (patient.cluster_id or "??"),
+                    "ChildID=%s"        % (patient.code or "??"),
+                    "HouseholdID=%s"    % (patient.household_id or "??"),
+                    "gender=%s"         % (patient.gender or "??"),
+                    "DOB=%s"            % (patient.date_of_birth or "??"),
+                    "age=%s"            % (patient.age_in_months or "??"),
+                    "height=%s"         % (ass.height or "??"),
+                    "weight=%s"         % (ass.weight or "??"),
+                    "oedema=%s"         % (ass.oedema or "??"),
+                    "MUAC=%s"           % (ass.muac or "??")]
 
             confirmation = "Thanks, %s. Received %s" %\
                 (healthworker.full_name(), " ".join(data))
@@ -304,7 +316,7 @@ class App(rapidsms.app.App):
             self.debug(e)
             resp["ERROR"] = "There was an error with your report - please check your measurements"
 
-        respond(message, resp)
+        message.respond(confirmation)
 
 
     kw.prefix = ['cancel', 'can']
