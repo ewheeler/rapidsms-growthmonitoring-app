@@ -50,6 +50,7 @@ class Patient(Person):
     def __unicode__(self):
         return "Child %s, Household %s, Cluster %s" % (self.code, self.household_id, self.cluster_id)
     
+
     class Meta:
         verbose_name = "Patient"
         
@@ -73,7 +74,7 @@ class Assessment(models.Model):
     weight              = models.DecimalField(max_digits=4,decimal_places=1,null=True) 
     muac                = models.DecimalField(max_digits=5,decimal_places=2,null=True) 
     oedema              = models.BooleanField(default=False)
-    diarrea             = models.BooleanField(default=False)
+    #diarrea             = models.BooleanField(default=False)
 
     # expensive calculations 
     mam                 = models.BooleanField(default=False)
