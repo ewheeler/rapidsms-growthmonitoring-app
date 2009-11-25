@@ -5,6 +5,60 @@
 
 <div class="module">
 
+<h2>Analyzed Surveys</h2>
+<table width="100%">
+    <thead>
+        <tr>
+            <th>Survey Date</th>
+            <th>Interviewer ID</th>
+            <th>Cluster ID</th>
+            <th>Child ID</th>
+            <th>Household ID</th>
+            <th>Sex</th>
+            <th>Date of Birth</th>
+            <th>Age</th>
+            <th>Height</th>
+            <th>Weight</th>
+            <th>Oedema</th>
+            <th>MUAC</th>
+            <th>Height for age z-score</th>
+            <th>Weight for age z-score</th>
+            <th>Weight for height z-score</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for ass in assessments.object_list %}
+            <tr>
+                <td>{{ass.date|date:"d-M-Y H:m:s"}}</td>
+                <td>{{ass.interviewer_id}}</td>
+                <td>{{ass.cluster_id}}</td>
+                <td>{{ass.child_id}}</td>
+                <td>{{ass.household_id}}</td>
+                <td>{{ass.sex}}</td>{# LOL!! #}
+                <td>{{ass.date_of_birth}}</td>
+                <td>{{ass.age_in_months}}</td>
+                <td>{{ass.height}}</td>
+                <td>{{ass.weight}}</td>
+                <td>{{ass.oedema}}</td>
+                <td>{{ass.muac}}</td>
+                <td>{{ass.weight4age}}</td>
+                <td>{{ass.height4age}}</td>
+                <td>{{ass.weight4height}}</td>
+                <td>{{ass.human_status}}</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="toolbar">
+    <a href="/childhealth/csv/assessments" class="export">{% trans "Export Analyzed Surveys" %}</a>
+</div>
+
+</div>
+
+<div class="module">
+
 <h2>Raw Survey Entries</h2>  
 <table width="100%"> 
     <thead>

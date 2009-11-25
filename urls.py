@@ -17,6 +17,9 @@ urlpatterns = patterns('',
     url(r'^childhealth/csv/surveyentries?$', 
         v.csv_entries),
 
+    url(r'^childhealth/csv/assessments?$',
+        v.csv_assessments),
+
     url(r'^childhealth/(?P<breadcrumbs>.*)\/?(?P<view>LocationType|Location)$',
         v.select_left),
     
