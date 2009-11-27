@@ -6,18 +6,6 @@ EXCEPT_MSG = {"NO_PERSON":"Person Not Found",
 ERROR_MSG = {}
 RESPONSE_MSG = {}
 
-CHILD_HEALTH_STATUS = [
-		 ("NA","NA"),
-		 ("NAM",""),
-                 ("MAM","Moderate Malnutrition"),
-                 ("SAM","Severe Malnutrition"),
-                 ("W","Wasting"),
-                 ("S","Stunting")]
-
-CHILD_HEALTH_STATUS_BOOL={
-	(True,False):"MAM",
-	(False,True):"SAM",
-	(False,False):"NAM"}
 DATA_QUALITY_TYPES =[("None",1),
         ("Clean",2),
         ("Error",3)]

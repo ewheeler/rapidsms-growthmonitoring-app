@@ -277,9 +277,7 @@ class App(rapidsms.app.App):
 
             ass = Assessment(healthworker=healthworker, patient=patient,\
                     height=height, weight=weight, muac=muac, oedema=oedema)
-            # perform analysis
-            # TODO add to save method
-            ass.analyze()
+
             results = ass.verify()
 
             # TODO find another way to do this, we don't want to log errors
@@ -291,6 +289,9 @@ class App(rapidsms.app.App):
             else:
                 try:
                     ass.save()
+                    # perform analysis
+                    # TODO add to save method
+                    ass.analyze()
                 except Exception,save_err:
                     self.debug("error saving")
                     self.debug(save_err)

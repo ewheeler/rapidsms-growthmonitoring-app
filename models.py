@@ -10,6 +10,8 @@ from locations.models import Location
 from reporters.models import Reporter
 from people.models import Person
 
+from healthtables.models import StuntingTable, WastingTable
+
 from childhealth.utils import *
 from messages import *
    
@@ -32,7 +34,15 @@ class HealthWorker(Reporter):
         return "%s" % (self.full_name())
 
 class Patient(Person):
-    status          = models.CharField(max_length=1000,choices=tuple(CHILD_HEALTH_STATUS),default="",blank=True)
+    PATIENT_STATUS = (
+		 ("NA","NA"),
+		 ("NAM",""),
+                 ("MAM","Moderate Malnutrition"),
+                 ("SAM","Severe Malnutrition"),
+                 ("W","Wasting"),
+                 ("S","Stunting"),)
+
+    status          = models.CharField(max_length=1000,choices=PATIENT_STATUS,default="",blank=True)
     last_updated    = models.DateTimeField(auto_now=True)
     household_id    = models.PositiveIntegerField(max_length=10, blank=True, null=True)
     cluster_id      = models.PositiveIntegerField(max_length=10, blank=True, null=True)
@@ -43,13 +53,32 @@ class Patient(Person):
         # returns patient's GOOD assessments
         return Assessment.objects.filter(patient=self.patient, status='G').order_by('-patient__last_updated')
 
+    def latest_assessment(self):
+        return assessments[0]
+
     @property
     def age_in_months_from_date_of_birth(self):
         return util.sloppy_date_to_age_in_months(self.date_of_birth)
 
     def __unicode__(self):
         return "Child %s, Household %s, Cluster %s" % (self.code, self.household_id, self.cluster_id)
-    
+
+    def status_from_bools(self, mam, sam, stunting):
+        if not mam and not sam and not stunting:
+            return "NAM"
+        #(False,True):"SAM"
+        elif sam and not mam:
+            return "SAM"
+        #(False,False):"NAM"
+        elif mam and not sam:
+            return "MAM"
+        elif stunting:
+            return "S"
+        #(True,False):"MAM"
+        elif not mam and not sam:
+            return "NAM"
+        else:
+            return "NA"
 
     class Meta:
         verbose_name = "Patient"
@@ -100,16 +129,33 @@ class Assessment(models.Model):
 
     #not pretty
     def nutritional_status(self):
+        #stunts = StuntingTable.objects.all()
+        #for stunt in stunts:
+            # convert to int to get floor, then to string
+            # so django will save as decimal
+        #    new_age = str(float(int(stunt.age)))
+        #    stunt.age = new_age
+        #    stunt.save()
         try: 
-            s_calc = StuntingTable.objects.filter(gender=self.patient.gender,age=self.patient.age())
+            s_calc = StuntingTable.objects.get(gender=self.patient.gender,age=self.patient.age_in_months)
             self.stunting = self.height < s_calc.height
+            #print "STUNTING: " + str(self.stunting)
             malnurished = WastingTable.objects.get(height=self.height)
             self.sam = self.weight <= malnurished.weight_70 
+            #print "SAM: " + str(self.sam)
             self.mam = (self.weight <= malnurished.weight_80) and (not self.sam)
-            self.patient.status = CHILD_HEALTH_STATUS[CHILD_HEALTH_STATUS_BOOL[(self.mam,self.sam)]]       
-        except:
+            #print "MAM: " + str(self.mam)
+            #print "STATUS: " + self.patient.status_from_bools(self.mam,self.sam, self.stunting)
+            self.patient.status = self.patient.status_from_bools(self.mam,self.sam, self.stunting)
+        except Exception, e:
+            print e
             return False
-    
+
+    def get_stunting(self):
+        stunt_from_table = stunting(self.date_of_birth, self.gender)
+        if stunt_from_table:
+            self.stunting = float(stunt_from_table) > float(self.latest_assessment().height)
+
     def zscores(self):
         pass
 

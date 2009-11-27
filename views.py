@@ -69,6 +69,7 @@ def ass_dicts_for_display():
     dicts_for_display = []
     asses = Assessment.objects.all().select_related()
     for ass in asses:
+        ass.analyze()
         ass_dict = {}
         # add desired fields from related models (we want to display the
         # IDs, ect from foreign fields rather than just the unicode() names
