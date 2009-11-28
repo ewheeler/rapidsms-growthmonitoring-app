@@ -124,7 +124,7 @@ class Assessment(models.Model):
         return "%s" % self.id
      
     def analyze(self):
-        self.nutritional_status()
+        #self.nutritional_status()
         self.zscores()
 
     #not pretty
@@ -154,9 +154,14 @@ class Assessment(models.Model):
     def get_stunting(self):
         stunt_from_table = stunting(self.date_of_birth, self.gender)
         if stunt_from_table:
-            self.stunting = float(stunt_from_table) > float(self.latest_assessment().height)
+            self.stunting = float(stunt_from_table) > float(self.height)
 
     def zscores(self):
+        age = self.patient.age_in_months
+        gender = self.patient.gender
+        weight4age = util.zscore_for_measurement("wfa",self.weight,age,gender)
+        height4age = util.zscore_for_measurement("lhfa",self.height,age,gender)
+        weight4height = util.zscore_for_measurement
         pass
 
     def verify(self): 
