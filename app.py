@@ -29,7 +29,13 @@ class App(rapidsms.app.App):
     month = r"\d\d?"
     year = r"\d{2}(\d{2})?"
     # expecting YYYY-MM-DD, YY-MM-DD, or YY-M-D, etc
-    datepattern = r"^\d{2}(\d{2})?[\.|\/|\\|\-]\d\d?[\.|\/|\\|\-]\d\d?$"
+    datepattern = r"^\d{2}(\d{2})?(?:[\.|\/|\\|\-])?\d\d?(?:[\.|\/|\\|\-])?\d\d?$"
+
+    def start(self):
+        # initialize childgrowth, which loads WHO tables
+        # TODO is this the best place for this??
+        # TODO make childgrowth options configurable
+        self.cg = childgrowth(False, False)
 
     def parse(self, message):
         self.handled = False 
@@ -56,7 +62,7 @@ class App(rapidsms.app.App):
                 except Exception, e:
                     # TODO only except NoneType error
                     # nothing was found, use default handler
-                    self.incoming_entry(message)
+                    self.unmatched(message)
                     return self.handled 
             else:
                 self.debug("App does not instantiate Keyworder as 'kw'")
@@ -283,21 +289,22 @@ class App(rapidsms.app.App):
             # TODO find another way to do this, we don't want to log errors
             # for buggy code, etc
             if ("ERROR" in results):
-                self.debug("error in result")
-                healthworker.errors = healthworker.errors + 1
-                healthworker.save()
+                pass
+                #self.debug("error in result")
+                #healthworker.errors = healthworker.errors + 1
+                #healthworker.save()
             else:
                 try:
                     ass.save()
-                    # perform analysis
-                    # TODO add to save method
-                    ass.analyze()
+                    # perform analysis based on cg instance from start()
+                    # TODO add to save method?
                 except Exception,save_err:
+                    # TODO this is very strange. remove
                     self.debug("error saving")
                     self.debug(save_err)
                     resp ={"ERROR": save_err}
-                    healthworker.errors = healthworker.errors + 1
-                    healthworker.save()
+                    #healthworker.errors = healthworker.errors + 1
+                    #healthworker.save()
 
             data = [
                     "ClusterID=%s"      % (patient.cluster_id or "??"),
@@ -319,6 +326,27 @@ class App(rapidsms.app.App):
 
         message.respond(confirmation)
 
+        results = ass.analyze(self.cg)
+        response_map = {
+            'weight4age' : 'Oops. I think weight or age is incorrect',
+            'height4age' : 'Oops. I think height or age is incorrect',
+            'weight4height' : 'Oops. I think weight or height is incorrect'
+        }
+        for ind, z in results.iteritems():
+            self.debug(str(ind) + " " + str(z))
+            if abs(z) > 3:
+                message.respond(response_map[ind])
+                # add one to healthworker's error tally
+                healthworker.errors = healthworker.errors + 1
+                healthworker.save()
+                # mark both the entry and the assessment as 'suspect'
+                survey_entry.flag = 'S'
+                survey_entry.save()
+                ass.status = 'S'
+                ass.save()
+
+    def unmatched(self, message):
+        message.respond("Sorry, I don't understand.")
 
     kw.prefix = ['cancel', 'can']
     @kw("(\d+?) (\d+?) (\d+?)")
