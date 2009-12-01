@@ -4,10 +4,11 @@
 from django.db import models
 from django.contrib.auth import models as auth_models
 from django.core.exceptions import ObjectDoesNotExist 
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
+from logger.models import IncomingMessage
 from locations.models import Location  
-from reporters.models import Reporter
+from reporters.models import Reporter, PersistantConnection
 from people.models import Person
 
 from healthtables.models import StuntingTable, WastingTable
@@ -26,12 +27,23 @@ class HealthWorker(Reporter):
     status                 = models.CharField(max_length=1,choices=HW_STATUS_CHOICES,default='A')
     interviewer_id          = models.PositiveIntegerField(max_length=10, blank=True, null=True)
 
-
     class Meta:
         verbose_name = "Health Worker"
 
     def __unicode__(self):
         return "%s" % (self.full_name())
+
+    def num_messages_sent(self, when=None):
+        time_chunks = {
+                'today' : datetime.datetime.now().date(),
+                'week' : (datetime.datetime.now()-timedelta(weeks=1)),
+                'month' : (datetime.datetime.now()-timedelta(days=30)),
+                'year' : (datetime.datetime.now()-timedelta(days=365))}
+        if when in time_chunks.keys():
+                return self.incoming_messages.filter(\
+                            received__gte=time_chunks[when]).count()
+        else:
+            return self.incoming_messages.all().count()
 
 class Patient(Person):
     PATIENT_STATUS = (
@@ -223,3 +235,23 @@ class SurveyEntry(models.Model):
     weight              = models.CharField(max_length=25,blank=True,null=True)
     oedema              = models.CharField(max_length=15,blank=True,null=True)
     muac                = models.CharField(max_length=15,blank=True,null=True)
+
+class Survey(models.Model):
+    begin_date              = models.DateField(blank=True,null=True)
+    end_date                = models.DateField(blank=True,null=True)
+    location                = models.CharField(max_length=160,blank=True,null=True)
+    description             = models.CharField(max_length=160,blank=True,null=True)
+
+    baseline_weight4age     = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
+    baseline_height4age     = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
+    baseline_weight4height  = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
+
+    avg_weight4age          = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
+    avg_height4age          = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
+    avg_weight4height       = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
+
+    def update_avg_zscores(self):
+        survey_assessments = Assessment.objects.filter(date__gte=self.begin_date, date__lte=self.end_date)
+        self.avg_weigh4age = survey_assessments.aggregate(avg_w4a=Avg('weight4age'))["avg_w4a"]
+        self.avg_height4age = survey_assessments.aggregate(avg_h4a=Avg('height4age'))["avg_h4a"]
+        self.avg_weight4height = survey_assessments.aggregate(avg_w4h=Avg('weight4height'))["avg_w4h"]
