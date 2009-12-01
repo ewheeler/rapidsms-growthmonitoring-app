@@ -28,13 +28,13 @@ class App(rapidsms.app.App):
     date = r"\d\d?"
     month = r"\d\d?"
     year = r"\d{2}(\d{2})?"
-    # expecting YYYY-MM-DD, YY-MM-DD, or YY-M-D, etc
+    # expecting YYYY-MM-DD, YY-MM-DD, YY-M-D, YYYYMMDD, YYMMDD, etc
     datepattern = r"^\d{2}(\d{2})?(?:[\.|\/|\\|\-])?\d\d?(?:[\.|\/|\\|\-])?\d\d?$"
 
     def start(self):
         # initialize childgrowth, which loads WHO tables
         # TODO is this the best place for this??
-        # TODO make childgrowth options configurable
+        # TODO make childgrowth options configurable via config.py
         self.cg = childgrowth(False, False)
 
     def parse(self, message):
@@ -116,6 +116,7 @@ class App(rapidsms.app.App):
         # easier to port old data...
         person_type, created = PersonType.objects.get_or_create(singular='Patient', plural='Patients')
         kwargs.update({'type' : person_type})
+
         try:
             # first try to look up patient using only id
             # we don't want to use bday and gender in case this is an update
@@ -134,6 +135,7 @@ class App(rapidsms.app.App):
                 # next line should bump us into the exception if we have a new kid
                 patient = Patient.objects.get(**id_kwargs)
                 self.debug("patient!")
+
                 # compare reported gender and bday to data on file
                 # and update + notify if necessary
                 bday_on_file = patient.date_of_birth
@@ -201,6 +203,7 @@ class App(rapidsms.app.App):
 
 
     kw.prefix = ['report', 'rep']
+    # TODO only match for a couple digit tokens (ids) and pass the rest in
     @kw("(.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?)")
     def report(self, message, interviewer, cluster, child, household, gender, bday, age, weight, height, oedema, muac):
         self.debug("reporting...")
