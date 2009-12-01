@@ -27,7 +27,7 @@ def childhealth_stats():
             "value":   SurveyEntry.objects.count()
         },
         {
-            "caption": "All Valid Surveys",
+            "caption": "Valid Surveys",
             "value":   Assessment.objects.count()
         },
         {
@@ -90,6 +90,27 @@ def childhealth_progress():
 @register.inclusion_tag("childhealth/partials/healthworkers.html")
 @dashboard("bottom_left", "childhealth/partials/healthworkers.html", "childhealth.can_view")
 def childhealth_healthworkers():
-        return { 
-            "healthworkers" : HealthWorker.objects.filter(status="A").select_related().order_by("-last_updated")}
+    healthworkers_infos = []
+    hws = HealthWorker.objects.filter(status="A")
+    for hw in hws:
+        info = {
+            "first_name" : hw.first_name,
+            "last_name" : hw.last_name,
+            "interviewer_id" : hw.interviewer_id,
+            "groups" : [g.title for g in hw.groups.flatten()],
+            "last_seen" : hw.last_seen(),
+            "num_message_count" : hw.num_messages_sent(),
+            "num_message_month" : hw.num_messages_sent("month"),
+            "num_message_week" : hw.num_messages_sent("week"),
+            "num_message_today" : hw.num_messages_sent("today"),
+            "surveys_today" : Assessment.objects.filter(\
+                healthworker=hw.pk, date__gte=datetime.datetime.now().date())\
+                .count(),
+            "goods" : Assessment.objects.filter(status="G",\
+                healthworker=hw.pk).count(),
+            "suspects" : Assessment.objects.filter(status="S",\
+                healthworker=hw.pk).count()
+        }
+        healthworkers_infos.append(info)
 
+    return { "healthworkers" : healthworkers_infos }
