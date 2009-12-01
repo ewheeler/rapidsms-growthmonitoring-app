@@ -33,18 +33,6 @@ def childhealth_stats():
         {
             "caption": "Suspect Surveys",
             "value":   Assessment.objects.filter(status='S').count()
-        },
-        {
-            "caption": "Avg weight-for-age z-score",
-            "value":   Assessment.objects.all().aggregate(Avg('weight4age'))["weight4age__avg"]
-        },
-        {
-            "caption": "Avg lenth/height-for-age z-score",
-            "value":   Assessment.objects.all().aggregate(Avg('height4age'))["height4age__avg"]
-        },
-        {
-            "caption": "Avg weight-for-lenth/height z-score",
-            "value":   Assessment.objects.all().aggregate(Avg('weight4height'))["weight4height__avg"]
         }
     ]}
 
