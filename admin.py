@@ -5,12 +5,15 @@ class AssessmentInline(admin.TabularInline):
     model = Assessment
 
 class HealthWorkerAdmin(admin.ModelAdmin):
-    list_display = ('first_name', 'last_name', 'message_count', 'errors', 'last_seen')
-    search_fields = ('first_name', 'last_name', 'alias')
+    list_display = ('first_name', 'last_name', 'message_count', 'errors',\
+        'connection', 'last_seen')
+    search_fields = ('first_name', 'last_name', 'alias', 'connection')
     inlines = [AssessmentInline, ]
 
 class PatientAdmin(admin.ModelAdmin):
-    list_display = ('code', 'cluster_id', 'household_id', 'gender', 'date_of_birth', 'age_in_months', 'age_in_months_from_date_of_birth', 'status', 'last_updated')
+    list_display = ('code', 'cluster_id', 'household_id', 'gender',\
+        'date_of_birth', 'age_in_months', 'age_in_months_from_date_of_birth',\
+        'status', 'last_updated')
     ordering = ['cluster_id']
     date_hierarchy = 'last_updated'
     inlines = [AssessmentInline, ]
