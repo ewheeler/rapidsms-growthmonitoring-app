@@ -1,0 +1,16 @@
+{% load reporters-tags %}
+<div class="module recent-reporters">
+	<h2>Interviewers</h2>
+	<ul>{% for hw in healthworkers %}
+		<li>
+			<div>{{ hw.full_name }} ({{ hw.interviewer_id }})</div>
+                        {% for g in hw.groups.flatten %}
+                        <div>{{ g.title }}</div>
+                        {% endfor %}
+			<span>Last message: {{ hw.last_seen|last_seen }}</span>
+                        <span>Messages sent: {{ hw.message_count }}</span>
+			<span>Suspect surveys: {{ hw.errors }}</span>
+		</li>
+            {% endfor %}
+	</ul>
+</div>

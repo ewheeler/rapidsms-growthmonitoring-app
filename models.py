@@ -82,7 +82,6 @@ class Patient(Person):
 
     class Meta:
         verbose_name = "Patient"
-        
 
 class Assessment(models.Model): 
     ASS_STATUS_CHOICES = (
@@ -115,9 +114,15 @@ class Assessment(models.Model):
     height4age          = models.DecimalField(max_digits=4,decimal_places=2,null=True,blank=True)
     weight4height       = models.DecimalField(max_digits=4,decimal_places=2,null=True,blank=True)
 
-
-
     class Meta:
+        # define a permission for this app to use the @permission_required
+        # decorator in childhealth's views
+        # in the admin's auth section, we have a group called 'viewers' whose
+        # users have this permission -- and are able to see this section
+        permissions = (
+            ("can_view", "Can view"),
+        )
+
         verbose_name = "Nutrition Assessment"
 
     def __unicode__(self):
