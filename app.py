@@ -9,6 +9,7 @@ from django.db.models import F
 
 import rapidsms
 from rapidsms.message import Message
+from rapidsms.message import StatusCodes
 from rapidsms.connection import Connection
 from rapidsms.parsers.keyworder import *
 
@@ -89,7 +90,7 @@ class App(rapidsms.app.App):
                     # parse the name, and create a healthworker/reporter
                     alias, first, last = Reporter.parse_name(name)
                     healthworker = HealthWorker(
-                        first_name=first, last_name=last,
+                        first_name=first, last_name=last, alias=alias,
                         interviewer_id=interviewer_id, registered_self=True,
                         message_count=1, language=lang)
                     healthworker.save()
@@ -202,10 +203,10 @@ class App(rapidsms.app.App):
 
 
 
-    kw.prefix = ['report', 'rep']
+    kw.prefix = ['report', 'rep', 'enq']
     # TODO only match for a couple digit tokens (ids) and pass the rest in
-    @kw("(.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?)")
-    def report(self, message, interviewer, cluster, child, household, gender, bday, age, weight, height, oedema, muac):
+    @kw("(.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?)")
+    def report(self, message, cluster, child, household, gender, bday, age, weight, height, oedema, muac):
         self.debug("reporting...")
 
         # save record of survey submission before doing any processing
@@ -221,7 +222,7 @@ class App(rapidsms.app.App):
         # send responses for each invalid id, if any
         if len(invalid_ids) > 0:
             for k,v in invalid_ids.iteritems():
-                message.respond("Sorry, ID code '%s' is not valid for a %s" % (v, k))
+                message.respond("Sorry, ID code '%s' is not valid for a %s" % (v, k), StatusCodes.APP_ERROR)
             # halt reporting process if any of the id codes are invalid
             return True
         try:
@@ -234,7 +235,7 @@ class App(rapidsms.app.App):
         healthworker.message_count  = healthworker.message_count+1
         if created:
             # halt reporting process and tell sender to register first
-            return message.respond("Please register before submitting survey: Send the word REGISTER followed by your Interviewer ID and your full name.")
+            return message.respond("Please register before submitting survey: Send the word REGISTER followed by your Interviewer ID and your full name.", StatusCodes.APP_ERROR)
 
         try:
             self.debug("getting patient...")
@@ -249,7 +250,7 @@ class App(rapidsms.app.App):
                 patient_kwargs.update({'date_of_birth' : dob_obj})
             else:
                 patient_kwargs.update({'date_of_birth' : ""})
-                message.respond("Sorry I don't understand '%s' as a child's date of birth. Please use YYYY-MM-DD" % (bday))
+                message.respond("Sorry I don't understand '%s' as a child's date of birth. Please use YYYY-MM-DD" % (bday), StatusCodes.APP_ERROR)
 
             # make sure reported gender is valid
             good_sex = self.good_sex(gender)
@@ -258,7 +259,7 @@ class App(rapidsms.app.App):
                 patient_kwargs.update({'gender' : good_sex})
             else:
                 patient_kwargs.update({'gender' : ""}) 
-                message.respond("Sorry I don't understand '%s' as a child's gender. Please use M for male or F for female." % (gender))
+                message.respond("Sorry I don't understand '%s' as a child's gender. Please use M for male or F for female." % (gender), StatusCodes.APP_ERROR)
 
             # find patient or create a new one
             self.debug(patient_kwargs)
@@ -338,7 +339,7 @@ class App(rapidsms.app.App):
         for ind, z in results.iteritems():
             self.debug(str(ind) + " " + str(z))
             if abs(z) > 3:
-                message.respond(response_map[ind])
+                message.respond(response_map[ind], StatusCodes.APP_ERROR)
                 # add one to healthworker's error tally
                 healthworker.errors = healthworker.errors + 1
                 healthworker.save()
@@ -349,7 +350,7 @@ class App(rapidsms.app.App):
                 ass.save()
 
     def unmatched(self, message):
-        message.respond("Sorry, I don't understand.")
+        message.respond("Sorry, I don't understand.", StatusCodes.APP_ERROR)
 
     kw.prefix = ['cancel', 'can']
     @kw("(\d+?) (\d+?) (\d+?)")
@@ -376,8 +377,8 @@ class App(rapidsms.app.App):
             if created:
                 message.respond("Hello %s, thanks for registering as Interviewer ID %s!" % (healthworker.full_name(), healthworker.interviewer_id))
             else:
-                message.respond("Hello again, %s. " % (healthworker.full_name()))
-                message.respond("To register a different interviewer for this ID, please first text REMOVE followed by the interviewer ID.")
+                message.respond("Hello again, %s. You are registered with RapidSMS" % (healthworker.full_name()))
+                #message.respond("To register a different interviewer for this ID, please first text REMOVE followed by the interviewer ID.")
         except Exception, e:
             self.debug("oops!")
             self.debug(e)
