@@ -63,8 +63,9 @@ class App(rapidsms.app.App):
                 except Exception, e:
                     # TODO only except NoneType error
                     # nothing was found, use default handler
-                    self.unmatched(message)
-                    return self.handled 
+                    #self.unmatched(message)
+                    self.debug("BANG")
+                    #return self.handled 
             else:
                 self.debug("App does not instantiate Keyworder as 'kw'")
         except Exception, e:
@@ -75,38 +76,44 @@ class App(rapidsms.app.App):
 	    pass
 
 
-    def __get_or_create_healthworker(self, msg, interviewer_id, name=None, lang='fr'):
+    def __get_or_create_healthworker(self, msg, interviewer_id=None, name=None, lang='fr'):
         self.debug("finding worker...")
         if hasattr(msg, "reporter"):
             self.debug("REPORTER PRESENT")
-            try:
+            self.debug(msg.persistance_dict)
+            if msg.persistance_dict.has_key('reporter'):
                 # if healthworker is already registered return him/her
-                self.debug(interviewer_id)
-                healthworker = HealthWorker.objects.get(interviewer_id=interviewer_id)
-            except ObjectDoesNotExist:
+                healthworker = HealthWorker.objects.get(pk=msg.persistance_dict['reporter'].pk)
+                return healthworker, False
+            if not msg.persistance_dict.has_key('reporter'):
                 #self.debug(e)
                 self.debug("no healthworker")
-                try:
-                    # parse the name, and create a healthworker/reporter
-                    alias, first, last = Reporter.parse_name(name)
-                    healthworker = HealthWorker(
-                        first_name=first, last_name=last, alias=alias,
-                        interviewer_id=interviewer_id, registered_self=True,
-                        message_count=1, language=lang)
-                    healthworker.save()
+                if interviewer_id is not None:
+                    try:
+                        healthworker = HealthWorker.objects.get(interviewer_id=interviewer_id)
+                        per_con = msg.persistance_dict['connection']
+                        per_con.reporter=healthworker
+                        per_con.save()
+                        return healthworker, False
+                    except ObjectDoesNotExist, MultipleObjectsReturned:
+                        try:
+                            # parse the name, and create a healthworker/reporter
+                            alias, first, last = Reporter.parse_name(name)
+                            healthworker = HealthWorker(
+                                first_name=first, last_name=last, alias=alias,
+                                interviewer_id=interviewer_id, registered_self=True,
+                                message_count=1, language=lang)
+                            healthworker.save()
 
-                    # attach the reporter to the current connection
-                    msg.persistant_connection.reporter = healthworker
-                    msg.persistant_connection.save()
+                            return healthworker, True
 
-                    return healthworker, True
-
-                # something went wrong - at the
-                # moment, we don't care what
-                except Exception, e:
-                    self.debug(e)
-            self.debug("existing healthworker")
-            return healthworker, False
+                        # something went wrong - at the
+                        # moment, we don't care what
+                        except Exception, e:
+                            self.debug('problem finding worker:')
+                            self.debug(e)
+                else:
+                    return None, False
 
 
     def __get_or_create_patient(self, message, **kwargs):
@@ -191,83 +198,103 @@ class App(rapidsms.app.App):
 
     def validate_ids(self, id_dict):
         self.debug("validate ids...")
-        valid_ids = {}
-        invalid_ids = {}
-        for k,v in id_dict.iteritems():
-            # TODO check more than the first digit?
-            if v[0].isdigit():
-                valid_ids.update({k:v})
-            else:
-                invalid_ids.update({k:v})
-        return valid_ids, invalid_ids
+        try:
+            valid_ids = {}
+            invalid_ids = {}
+            for k,v in id_dict.iteritems():
+                if v.isdigit():
+                    valid_ids.update({k:v})
+                else:
+                    invalid_ids.update({k:v})
+            return valid_ids, invalid_ids
+        except Exception, e:
+            self.debug('problem validating ids:')
+            self.debug(e)
 
 
 
     kw.prefix = ['report', 'rep', 'enq']
-    # TODO only match for a couple digit tokens (ids) and pass the rest in
-    @kw("(.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?) (.*?)")
-    def report(self, message, cluster, child, household, gender, bday, age, weight, height, oedema, muac):
+    @kw("(.*?) (.*?) (.*?) (.*)")
+    def report(self, message, cluster_id, child_id, household_id, data_tokens):#, gender, bday, age, weight, height, oedema, muac):
         self.debug("reporting...")
+        try:
+            # find out who is submitting this report
+            healthworker, created = self.__get_or_create_healthworker(message)
+        except Exception, e:
+            self.debug(e)
+        if healthworker is None:
+            # halt reporting process and tell sender to register first
+            return message.respond("Please register before submitting survey: Send the word REGISTER followed by your Interviewer ID and your full name.", StatusCodes.APP_ERROR)
 
-        # save record of survey submission before doing any processing
-        survey_entry = SurveyEntry(healthworker_id=interviewer,\
-            cluster_id=cluster, child_id=child, household_id=household,\
-            sex=gender, date_of_birth=bday, age_in_months=age, height=height,\
-            weight=weight, oedema=oedema, muac=muac)
-        survey_entry.save()
+        token_labels = ['sex', 'date_of_birth', 'age_in_months', 'weight', 'height', 'oedema', 'muac']
+        token_data = data_tokens.split()
+        
+        try:
+            if len(token_data) > 7:
+                self.debug("too much data")
+                message.respond("Too much data!", StatusCodes.APP_ERROR)
+
+            tokens = dict(zip(token_labels, token_data))
+
+            for k,v in tokens.iteritems():
+                print v
+                if v.upper() in ['X', 'XX', 'XXX']:
+                    tokens.update({k : None})
+
+            # save record of survey submission before doing any processing
+            survey_entry = SurveyEntry(**tokens)
+            if healthworker.interviewer_id is not None:
+                survey_entry.healthworker_id=healthworker.interviewer_id
+            survey_entry.cluster_id = cluster_id
+            survey_entry.child_id = child_id
+            survey_entry.household_id = household_id
+            survey_entry.save()
+        except Exception, e:
+            self.debug(e)
 
         # check that all three id codes are numbers
-        valid_ids, invalid_ids = self.validate_ids({'interviewer' : interviewer,\
-            'cluster' : cluster, 'household' : household, 'child' : child})
+        valid_ids, invalid_ids = self.validate_ids({'interviewer' : str(healthworker.interviewer_id),\
+            'cluster' : cluster_id, 'household' : household_id, 'child' : child_id})
         # send responses for each invalid id, if any
         if len(invalid_ids) > 0:
             for k,v in invalid_ids.iteritems():
                 message.respond("Sorry, ID code '%s' is not valid for a %s" % (v, k), StatusCodes.APP_ERROR)
             # halt reporting process if any of the id codes are invalid
             return True
-        try:
-            # find out who is submitting this report
-            healthworker, created = self.__get_or_create_healthworker(message, interviewer)
-        except Exception, e:
-            self.debug(e)
-        self.debug(healthworker)
         # TODO this is silly. move to reporters? logger? count logged messages?
         healthworker.message_count  = healthworker.message_count+1
-        if created:
-            # halt reporting process and tell sender to register first
-            return message.respond("Please register before submitting survey: Send the word REGISTER followed by your Interviewer ID and your full name.", StatusCodes.APP_ERROR)
 
         try:
             self.debug("getting patient...")
             # begin collecting valid patient arguments
-            patient_kwargs = {'cluster_id' : cluster, 'household_id' :\
-                household, 'code' : child}
+            patient_kwargs = {'cluster_id' : cluster_id, 'household_id' :\
+                household_id, 'code' : child_id}
 
             # make sure bday is valid
-            dob_str, dob_obj = self.good_date(bday)
+            dob_str, dob_obj = self.good_date(survey_entry.date_of_birth)
             if dob_obj is not None:
                 self.debug(dob_obj)
                 patient_kwargs.update({'date_of_birth' : dob_obj})
             else:
                 patient_kwargs.update({'date_of_birth' : ""})
-                message.respond("Sorry I don't understand '%s' as a child's date of birth. Please use YYYY-MM-DD" % (bday), StatusCodes.APP_ERROR)
+                message.respond("Sorry I don't understand '%s' as a child's date of birth. Please use YYYY-MM-DD" % (survey_entry.date_of_birth), StatusCodes.APP_ERROR)
 
             # make sure reported gender is valid
-            good_sex = self.good_sex(gender)
+            good_sex = self.good_sex(survey_entry.sex)
             if good_sex is not None:
                 self.debug(good_sex)
                 patient_kwargs.update({'gender' : good_sex})
             else:
                 patient_kwargs.update({'gender' : ""}) 
-                message.respond("Sorry I don't understand '%s' as a child's gender. Please use M for male or F for female." % (gender), StatusCodes.APP_ERROR)
+                message.respond("Sorry I don't understand '%s' as a child's gender. Please use M for male or F for female." % (survey_entry.sex), StatusCodes.APP_ERROR)
 
             # find patient or create a new one
             self.debug(patient_kwargs)
             patient, created = self.__get_or_create_patient(message, **patient_kwargs)
 
             # update age separately (should be the only volitile piece of info)
-            self.debug(age)
-            patient.age_in_months = age
+            self.debug(survey_entry.age_in_months)
+            patient.age_in_months = survey_entry.age_in_months
             patient.save()
 
             # calculate age based on reported date of birth
@@ -281,12 +308,12 @@ class App(rapidsms.app.App):
 
             self.debug("making assessment...")
             # create nutritional assessment entry
-            self.debug(height)
-            self.debug(weight)
-            self.debug(muac)
+            self.debug(survey_entry.height)
+            self.debug(survey_entry.weight)
+            self.debug(survey_entry.muac)
 
             ass = Assessment(healthworker=healthworker, patient=patient,\
-                    height=height, weight=weight, muac=muac, oedema=oedema)
+                    height=survey_entry.height, weight=survey_entry.weight, muac=survey_entry.muac, oedema=survey_entry.oedema)
 
             results = ass.verify()
 
