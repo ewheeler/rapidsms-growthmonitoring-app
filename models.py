@@ -7,7 +7,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from datetime import datetime, date, timedelta
 
 from logger.models import IncomingMessage
-from locations.models import Location  
+#from locations.models import Location  
 from reporters.models import Reporter, PersistantConnection
 from people.models import Person
 
@@ -62,8 +62,7 @@ class Patient(Person):
 
     @property
     def assessments(self):
-        # returns patient's GOOD assessments
-        return Assessment.objects.filter(patient=self.patient, status='G').order_by('-patient__last_updated')
+        return Assessment.objects.filter(patient=self.patient).order_by('-patient__last_updated')
 
     def latest_assessment(self):
         return assessments[0]
