@@ -169,11 +169,11 @@ class App(rapidsms.app.App):
 
 
     # Report 9 from outer space
-    @kw("help (.+?)")
-    def help(self, message, more=None):
-        respond(message,{"OK":SMS_RESPONSE["HELP"]})
+    #@kw("help (.+?)")
+    #def help(self, message, more=None):
+    #    respond(message,{"OK":SMS_RESPONSE["HELP"]})
 
-    def good_date(self, potential_date):
+    def _validate_date(self, potential_date):
         self.debug("hot date...")
         self.debug(potential_date)
         matches = re.match( self.datepattern, potential_date, re.IGNORECASE)
@@ -187,7 +187,7 @@ class App(rapidsms.app.App):
         else:
             return None, None
 
-    def good_sex(self, potential_sex):
+    def _validate_sex(self, potential_sex):
         self.debug("good sex...")
         self.debug(potential_sex)
         gender = util.get_good_sex(potential_sex)
@@ -195,8 +195,18 @@ class App(rapidsms.app.App):
             return gender
         else:
             return None
+    
+    def _validate_bool(self, potential_bool):
+        self.debug("good bool...")
+        self.debug(potential_bool)
+        if potential_bool[0].upper() in ["Y", "YES", "O", "OUI"]:
+            return "Y"
+        elif potential_bool[0].upper() in ["N", "NO", "NON"]:
+            return "N"
+        else:
+            return None
 
-    def validate_ids(self, id_dict):
+    def _validate_ids(self, id_dict):
         self.debug("validate ids...")
         try:
             valid_ids = {}
@@ -238,10 +248,12 @@ class App(rapidsms.app.App):
 
             for k,v in tokens.iteritems():
                 print v
+                # replace 'no data' shorthands with None
                 if v.upper() in ['X', 'XX', 'XXX']:
                     tokens.update({k : None})
 
             # save record of survey submission before doing any processing
+            # so we have all of the entries as they were submitted
             survey_entry = SurveyEntry(**tokens)
             if healthworker.interviewer_id is not None:
                 survey_entry.healthworker_id=healthworker.interviewer_id
@@ -253,7 +265,7 @@ class App(rapidsms.app.App):
             self.debug(e)
 
         # check that all three id codes are numbers
-        valid_ids, invalid_ids = self.validate_ids({'interviewer' : str(healthworker.interviewer_id),\
+        valid_ids, invalid_ids = self._validate_ids({'interviewer' : str(healthworker.interviewer_id),\
             'cluster' : cluster_id, 'household' : household_id, 'child' : child_id})
         # send responses for each invalid id, if any
         if len(invalid_ids) > 0:
@@ -270,17 +282,21 @@ class App(rapidsms.app.App):
             patient_kwargs = {'cluster_id' : cluster_id, 'household_id' :\
                 household_id, 'code' : child_id}
 
-            # make sure bday is valid
-            dob_str, dob_obj = self.good_date(survey_entry.date_of_birth)
-            if dob_obj is not None:
-                self.debug(dob_obj)
-                patient_kwargs.update({'date_of_birth' : dob_obj})
+            # no submitted bday
+            if survey_entry.date_of_birth is None:
+                patient_kwargs.update({'date_of_birth' : None})
+            # make sure submitted bday is valid
             else:
-                patient_kwargs.update({'date_of_birth' : ""})
-                message.respond("Sorry I don't understand '%s' as a child's date of birth. Please use YYYY-MM-DD" % (survey_entry.date_of_birth), StatusCodes.APP_ERROR)
+                dob_str, dob_obj = self._validate_date(survey_entry.date_of_birth)
+                if dob_obj is not None:
+                    self.debug(dob_obj)
+                    patient_kwargs.update({'date_of_birth' : dob_obj})
+                else:
+                    patient_kwargs.update({'date_of_birth' : ""})
+                    message.respond("Sorry I don't understand '%s' as a child's date of birth. Please use YYYY-MM-DD" % (survey_entry.date_of_birth), StatusCodes.APP_ERROR)
 
             # make sure reported gender is valid
-            good_sex = self.good_sex(survey_entry.sex)
+            good_sex = self._validate_sex(survey_entry.sex)
             if good_sex is not None:
                 self.debug(good_sex)
                 patient_kwargs.update({'gender' : good_sex})
@@ -312,8 +328,9 @@ class App(rapidsms.app.App):
             self.debug(survey_entry.weight)
             self.debug(survey_entry.muac)
 
+            valid_oedema = self._validate_bool(survey_entry.oedema)
             ass = Assessment(healthworker=healthworker, patient=patient,\
-                    height=survey_entry.height, weight=survey_entry.weight, muac=survey_entry.muac, oedema=survey_entry.oedema)
+                    height=survey_entry.height, weight=survey_entry.weight, muac=survey_entry.muac, oedema=valid_oedema)
 
             results = ass.verify()
 
@@ -327,8 +344,6 @@ class App(rapidsms.app.App):
             else:
                 try:
                     ass.save()
-                    # perform analysis based on cg instance from start()
-                    # TODO add to save method?
                 except Exception,save_err:
                     # TODO this is very strange. remove
                     self.debug("error saving")
@@ -357,10 +372,12 @@ class App(rapidsms.app.App):
 
         message.respond(confirmation)
 
+        # perform analysis based on cg instance from start()
+        # TODO add to Assessment save method?
         results = ass.analyze(self.cg)
         response_map = {
-            'weight4age' : 'Oops. I think weight or age is incorrect',
-            'height4age' : 'Oops. I think height or age is incorrect',
+            'weight4age'    : 'Oops. I think weight or age is incorrect',
+            'height4age'    : 'Oops. I think height or age is incorrect',
             'weight4height' : 'Oops. I think weight or height is incorrect'
         }
         for ind, z in results.iteritems():
@@ -385,7 +402,7 @@ class App(rapidsms.app.App):
         try:
             patient = Patient.objects.get(cluster_id=cluster,\
                         household_id=household, code=child)
-            ass = patient.assessments[0]
+            ass = patient.latest_assessment()
             if ass is not None:
                 ass.cancel()
                 message.respond("CANCELLED report submitted by %s (ID %s) on %s for Child ID %s (Household %s, Cluster %s)" % (ass.healthworker.full_name(), ass.healthworker.interviewer_id, ass.date, patient.code, patient.household_id, patient.cluster_id))
@@ -407,7 +424,7 @@ class App(rapidsms.app.App):
                 message.respond("Hello again, %s. You are registered with RapidSMS" % (healthworker.full_name()))
                 #message.respond("To register a different interviewer for this ID, please first text REMOVE followed by the interviewer ID.")
         except Exception, e:
-            self.debug("oops!")
+            self.debug("oops! problem registering heathworker:")
             self.debug(e)
             pass
 
