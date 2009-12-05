@@ -64,7 +64,8 @@ class App(rapidsms.app.App):
                     # TODO only except NoneType error
                     # nothing was found, use default handler
                     #self.unmatched(message)
-                    self.debug("BANG")
+                    self.debug("BANG:")
+                    self.debug(e)
                     #return self.handled 
             else:
                 self.debug("App does not instantiate Keyworder as 'kw'")
@@ -92,7 +93,9 @@ class App(rapidsms.app.App):
                     try:
                         healthworker = HealthWorker.objects.get(interviewer_id=interviewer_id)
                         per_con = msg.persistance_dict['connection']
-                        per_con.reporter=healthworker
+                        # giving per_con.reporter healthworker
+                        # from above doesnt seem to work..
+                        per_con.reporter=Reporter.objects.get(pk=healthworker.pk)
                         per_con.save()
                         return healthworker, False
                     except ObjectDoesNotExist, MultipleObjectsReturned:
@@ -174,37 +177,52 @@ class App(rapidsms.app.App):
     #    respond(message,{"OK":SMS_RESPONSE["HELP"]})
 
     def _validate_date(self, potential_date):
-        self.debug("hot date...")
+        self.debug("validate date...")
         self.debug(potential_date)
-        matches = re.match( self.datepattern, potential_date, re.IGNORECASE)
-        self.debug(matches)
-        if matches is not None:
-            date = matches.group(0)
-            self.debug(date)
-            good_date_str, good_date_obj = util.get_good_date(date)
-            self.debug(good_date_str)
-            return good_date_str, good_date_obj 
-        else:
-            return None, None
+        try:
+            matches = re.match( self.datepattern, potential_date, re.IGNORECASE)
+            self.debug(matches)
+            if matches is not None:
+                date = matches.group(0)
+                self.debug(date)
+                good_date_str, good_date_obj = util.get_good_date(date)
+                self.debug(good_date_str)
+                return good_date_str, good_date_obj 
+            else:
+                return None, None
+        except Exception, e:
+            self.debug('problem validating date:')
+            self.debug(e)
 
     def _validate_sex(self, potential_sex):
-        self.debug("good sex...")
+        self.debug("validate sex...")
         self.debug(potential_sex)
-        gender = util.get_good_sex(potential_sex)
-        if gender is not None:
-            return gender
-        else:
-            return None
+        try:
+            gender = util.get_good_sex(potential_sex)
+            if gender is not None:
+                return gender
+            else:
+                return None
+        except Exception, e:
+            self.debug('problem validating sex:')
+            self.debug(e)
     
     def _validate_bool(self, potential_bool):
-        self.debug("good bool...")
+        self.debug("validate bool...")
         self.debug(potential_bool)
-        if potential_bool[0].upper() in ["Y", "YES", "O", "OUI"]:
-            return "Y"
-        elif potential_bool[0].upper() in ["N", "NO", "NON"]:
-            return "N"
-        else:
-            return None
+        try:
+            if potential_bool is not None:
+                if potential_bool[0].upper() in ["Y", "YES", "O", "OUI"]:
+                    return "Y"
+                elif potential_bool[0].upper() in ["N", "NO", "NON"]:
+                    return "N"
+                else:
+                    return None
+            else:
+                return None
+        except Exception, e:
+            self.debug('problem validating bool:')
+            self.debug(e)
 
     def _validate_ids(self, id_dict):
         self.debug("validate ids...")
@@ -221,6 +239,32 @@ class App(rapidsms.app.App):
             self.debug('problem validating ids:')
             self.debug(e)
 
+    def _validate_measurements(self, height, weight, muac):
+        self.debug("validate measurements...")
+        valid_height = False
+        valid_weight = False
+        valid_muac = False
+        try:
+            if height is not None:
+                if 44.5 < float(height) < 120.4:
+                    valid_height = True
+            else:
+                valid_height = True
+            if weight is not None:
+                if 3.0 < float(weight) < 20.0:
+                    valid_weight = True
+            else:
+                valid_weight = True
+            if muac is not None:
+                # TODO i made these up. cm or mm??
+                if 10.0 < float(muac) < 150.0:
+                    valid_muac = True
+            else:
+                valid_muac = True
+            return valid_height, valid_weight, valid_muac
+        except Exception, e:
+            self.debug('problem validating measurements:')
+            self.debug(e)
 
 
     kw.prefix = ['report', 'rep', 'enq']
@@ -276,52 +320,58 @@ class App(rapidsms.app.App):
         # TODO this is silly. move to reporters? logger? count logged messages?
         healthworker.message_count  = healthworker.message_count+1
 
-        try:
-            self.debug("getting patient...")
-            # begin collecting valid patient arguments
-            patient_kwargs = {'cluster_id' : cluster_id, 'household_id' :\
-                household_id, 'code' : child_id}
+        self.debug("getting patient...")
+        # begin collecting valid patient arguments
+        patient_kwargs = {'cluster_id' : cluster_id, 'household_id' :\
+            household_id, 'code' : child_id}
 
-            # no submitted bday
-            if survey_entry.date_of_birth is None:
-                patient_kwargs.update({'date_of_birth' : None})
-            # make sure submitted bday is valid
+        # no submitted bday
+        if survey_entry.date_of_birth is None:
+            patient_kwargs.update({'date_of_birth' : None})
+        # make sure submitted bday is valid
+        else:
+            dob_str, dob_obj = self._validate_date(survey_entry.date_of_birth)
+            if dob_obj is not None:
+                self.debug(dob_obj)
+                patient_kwargs.update({'date_of_birth' : dob_obj})
             else:
-                dob_str, dob_obj = self._validate_date(survey_entry.date_of_birth)
-                if dob_obj is not None:
-                    self.debug(dob_obj)
-                    patient_kwargs.update({'date_of_birth' : dob_obj})
-                else:
-                    patient_kwargs.update({'date_of_birth' : ""})
-                    message.respond("Sorry I don't understand '%s' as a child's date of birth. Please use YYYY-MM-DD" % (survey_entry.date_of_birth), StatusCodes.APP_ERROR)
+                patient_kwargs.update({'date_of_birth' : ""})
+                message.respond("Sorry I don't understand '%s' as a child's date of birth. Please use YYYY-MM-DD" % (survey_entry.date_of_birth), StatusCodes.APP_ERROR)
 
-            # make sure reported gender is valid
-            good_sex = self._validate_sex(survey_entry.sex)
-            if good_sex is not None:
-                self.debug(good_sex)
-                patient_kwargs.update({'gender' : good_sex})
-            else:
-                patient_kwargs.update({'gender' : ""}) 
-                message.respond("Sorry I don't understand '%s' as a child's gender. Please use M for male or F for female." % (survey_entry.sex), StatusCodes.APP_ERROR)
+        # make sure reported gender is valid
+        good_sex = self._validate_sex(survey_entry.sex)
+        if good_sex is not None:
+            self.debug(good_sex)
+            patient_kwargs.update({'gender' : good_sex})
+        else:
+            patient_kwargs.update({'gender' : ""}) 
+            # halt reporting process if we dont have a valid gender.
+            # this can't be unknown. check in their pants if you arent sure
+            return message.respond("Sorry I don't understand '%s' as a child's gender. Please use M for male or F for female." % (survey_entry.sex), StatusCodes.APP_ERROR)
 
-            # find patient or create a new one
-            self.debug(patient_kwargs)
-            patient, created = self.__get_or_create_patient(message, **patient_kwargs)
+        # find patient or create a new one
+        self.debug(patient_kwargs)
+        patient, created = self.__get_or_create_patient(message, **patient_kwargs)
 
-            # update age separately (should be the only volitile piece of info)
-            self.debug(survey_entry.age_in_months)
+        # update age separately (should be the only volitile piece of info)
+        self.debug(survey_entry.age_in_months)
+        if survey_entry.age_in_months is not None:
             patient.age_in_months = survey_entry.age_in_months
-            patient.save()
+        else:
+            patient.age_in_months = util.sloppy_date_to_age_in_months(patient.date_of_birth)
+        self.debug(patient.age_in_months)
+        patient.save()
 
-            # calculate age based on reported date of birth
-            # respond if calcualted age differs from reported age
-            # by more than 3 months TODO make this configurable
-            #self.debug("getting sloppy age...")
-            #sloppy_age_in_months = util.sloppy_date_to_age_in_months(patient.date_of_birth)
-            #self.debug(sloppy_age_in_months)
-            #if (abs(int(sloppy_age_in_months) - int(patient.age_in_months)) > 3):
-            #    message.respond("Date of birth indicates Child ID %s's age (in months) is %s, which does not match the reported age (in months) of %s" % (patient.code, sloppy_age_in_months, patient.age_in_months))
+        # calculate age based on reported date of birth
+        # respond if calcualted age differs from reported age
+        # by more than 3 months TODO make this configurable
+        #self.debug("getting sloppy age...")
+        #sloppy_age_in_months = util.sloppy_date_to_age_in_months(patient.date_of_birth)
+        #self.debug(sloppy_age_in_months)
+        #if (abs(int(sloppy_age_in_months) - int(patient.age_in_months)) > 3):
+        #    message.respond("Date of birth indicates Child ID %s's age (in months) is %s, which does not match the reported age (in months) of %s" % (patient.code, sloppy_age_in_months, patient.age_in_months))
 
+        try:
             self.debug("making assessment...")
             # create nutritional assessment entry
             self.debug(survey_entry.height)
@@ -329,52 +379,47 @@ class App(rapidsms.app.App):
             self.debug(survey_entry.muac)
 
             valid_oedema = self._validate_bool(survey_entry.oedema)
-            ass = Assessment(healthworker=healthworker, patient=patient,\
-                    height=survey_entry.height, weight=survey_entry.weight, muac=survey_entry.muac, oedema=valid_oedema)
+            valid_height, valid_weight, valid_muac = self._validate_measurements(\
+                survey_entry.height, survey_entry.weight, survey_entry.muac)
 
-            results = ass.verify()
+            self.debug(valid_height)
+            self.debug(valid_weight)
+            self.debug(valid_muac)
 
-            # TODO find another way to do this, we don't want to log errors
-            # for buggy code, etc
-            if ("ERROR" in results):
-                pass
-                #self.debug("error in result")
-                #healthworker.errors = healthworker.errors + 1
-                #healthworker.save()
+            if valid_height and valid_weight and valid_muac:
+                ass = Assessment(healthworker=healthworker, patient=patient,\
+                        height=survey_entry.height, weight=survey_entry.weight, muac=survey_entry.muac, oedema=valid_oedema)
             else:
-                try:
-                    ass.save()
-                except Exception,save_err:
-                    # TODO this is very strange. remove
-                    self.debug("error saving")
-                    self.debug(save_err)
-                    resp ={"ERROR": save_err}
-                    #healthworker.errors = healthworker.errors + 1
-                    #healthworker.save()
-
-            data = [
-                    "ClusterID=%s"      % (patient.cluster_id or "??"),
-                    "ChildID=%s"        % (patient.code or "??"),
-                    "HouseholdID=%s"    % (patient.household_id or "??"),
-                    "gender=%s"         % (patient.gender or "??"),
-                    "DOB=%s"            % (patient.date_of_birth or "??"),
-                    "age=%s"            % (patient.age_in_months or "??"),
-                    "height=%s"         % (ass.height or "??"),
-                    "weight=%s"         % (ass.weight or "??"),
-                    "oedema=%s"         % (ass.oedema or "??"),
-                    "MUAC=%s"           % (ass.muac or "??")]
-
-            confirmation = "Thanks, %s. Received %s" %\
-                (healthworker.full_name(), " ".join(data))
-        except Exception,e:
+                return message.respond('Measurement problem. Please try again.')
+        except Exception, e:
+            self.debug("problem making assessment:")
             self.debug(e)
-            resp["ERROR"] = "There was an error with your report - please check your measurements"
+
+        ass.save()
+        self.debug("saved assessment")
+
+        data = [
+                "ClusterID=%s"      % (patient.cluster_id or "??"),
+                "ChildID=%s"        % (patient.code or "??"),
+                "HouseholdID=%s"    % (patient.household_id or "??"),
+                "gender=%s"         % (patient.gender or "??"),
+                "DOB=%s"            % (patient.date_of_birth or "??"),
+                "age=%s"            % (patient.age_in_months or "??"),
+                "height=%s"         % (ass.height or "??"),
+                "weight=%s"         % (ass.weight or "??"),
+                "oedema=%s"         % (ass.oedema or "??"),
+                "MUAC=%s"           % (ass.muac or "??")]
+
+        confirmation = "Thanks, %s. Received %s" %\
+            (healthworker.full_name(), " ".join(data))
 
         message.respond(confirmation)
+        self.debug('sent confirmation')
 
         # perform analysis based on cg instance from start()
         # TODO add to Assessment save method?
         results = ass.analyze(self.cg)
+        self.debug(results)
         response_map = {
             'weight4age'    : 'Oops. I think weight or age is incorrect',
             'height4age'    : 'Oops. I think height or age is incorrect',
@@ -382,16 +427,17 @@ class App(rapidsms.app.App):
         }
         for ind, z in results.iteritems():
             self.debug(str(ind) + " " + str(z))
-            if abs(z) > 3:
-                message.respond(response_map[ind], StatusCodes.APP_ERROR)
-                # add one to healthworker's error tally
-                healthworker.errors = healthworker.errors + 1
-                healthworker.save()
-                # mark both the entry and the assessment as 'suspect'
-                survey_entry.flag = 'S'
-                survey_entry.save()
-                ass.status = 'S'
-                ass.save()
+            if z is not None:
+                if abs(z) > 3:
+                    message.respond(response_map[ind], StatusCodes.APP_ERROR)
+                    # add one to healthworker's error tally
+                    healthworker.errors = healthworker.errors + 1
+                    healthworker.save()
+                    # mark both the entry and the assessment as 'suspect'
+                    survey_entry.flag = 'S'
+                    survey_entry.save()
+                    ass.status = 'S'
+                    ass.save()
 
     def unmatched(self, message):
         message.respond("Sorry, I don't understand.", StatusCodes.APP_ERROR)
@@ -428,6 +474,7 @@ class App(rapidsms.app.App):
             self.debug(e)
             pass
 
+    @kw("remove (\d+?)")
     def remove_healthworker(self, message, code):
         self.debug("removing...")
         healthworker, created = self.__get_or_create_healthworker(message, code)

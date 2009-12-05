@@ -109,9 +109,9 @@ class Assessment(models.Model):
     status              = models.CharField(max_length=1,choices=ASS_STATUS_CHOICES,default='G')
 
     # indicators
-    height              = models.DecimalField(max_digits=4,decimal_places=1,null=True) 
-    weight              = models.DecimalField(max_digits=4,decimal_places=1,null=True) 
-    muac                = models.DecimalField(max_digits=5,decimal_places=2,null=True) 
+    height              = models.DecimalField(max_digits=4,decimal_places=1,blank=True,null=True)
+    weight              = models.DecimalField(max_digits=4,decimal_places=1,blank=True,null=True)
+    muac                = models.DecimalField(max_digits=6,decimal_places=2,blank=True,null=True)
     oedema              = models.BooleanField(default=False)
     diarrea             = models.BooleanField(default=False)
 
@@ -149,24 +149,31 @@ class Assessment(models.Model):
         return results
 
     def zscores(self, childgrowth):
+        print 'ZSCORES'
         age = self.patient.age_in_months
+        print age
         gender = self.patient.gender
-        self.weight4age = childgrowth.zscore_for_measurement(\
-                        "wfa", self.weight, age, gender)
-        self.height4age = childgrowth.zscore_for_measurement(\
-                        "lhfa", self.height, age, gender)
+        print gender
+        if age is not None:
+            if self.weight is not None:
+                self.weight4age = childgrowth.zscore_for_measurement(\
+                                "wfa", self.weight, age, gender)
+            if self.height is not None:
+                self.height4age = childgrowth.zscore_for_measurement(\
+                                "lhfa", self.height, age, gender)
 
         # determine whether to use weight-for-length or weight-for-height
         # based on age. TODO accept a parameter indicating whether child
         # was measured standing or recumbent
-        if age <= 24:
-            self.weight4height = childgrowth.zscore_for_measurement(\
-                        "wfl", self.weight, age, gender, self.height)
-        elif age > 24:
-            self.weight4height = childgrowth.zscore_for_measurement(\
-                        "wfh", self.weight, age, gender, self.height)
-        else:
-            pass
+        if self.weight is not None and self.height is not None:
+            if age <= 24:
+                self.weight4height = childgrowth.zscore_for_measurement(\
+                            "wfl", self.weight, age, gender, self.height)
+            elif age > 24:
+                self.weight4height = childgrowth.zscore_for_measurement(\
+                            "wfh", self.weight, age, gender, self.height)
+            else:
+                pass
         self.save()
 
     #not pretty
