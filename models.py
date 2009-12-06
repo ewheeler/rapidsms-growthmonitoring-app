@@ -14,7 +14,7 @@ from people.models import Person
 from healthtables.models import StuntingTable, WastingTable
 
 from childhealth.utils import *
-from messages import *
+#from messages import *
    
 class HealthWorker(Reporter):
     HW_STATUS_CHOICES = (

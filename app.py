@@ -1,8 +1,9 @@
 #!/usr/bin/env python
-# vim: ai ts=4 sts=4 et sw=4
+# vim: ai ts=4 sts=4 et sw=4 encoding=utf-8
 
 from datetime import date, datetime
 import time
+import gettext
 
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.db.models import F
@@ -17,9 +18,55 @@ from logger.models import *
 from people.models import PersonType
 from childhealth.utils import *
 from childhealth.models import *
-import messages
+from childhealth.messages import *
+#
+# Module level translation calls so we don't have to prefix everything 
+# so we don't have to prefix _t() with 'self'!!
+#
+
+# Mutable globals hack 'cause Python module globals are WHACK
+_G = { 
+    'SUPPORTED_LANGS': {
+        # 'deb':u'Debug',
+        'fr':[u'Français'],
+        'en':['English'],
+        },
+    'TRANSLATORS': {"en": FAKE_GETTEXT["en"], "fr": FAKE_GETTEXT["fr"]},
+    'DEFAULT_LANG':'fr',
+    }
+
+########
+# i18n #
+########
+#def _init_translators():
+    #path = os.path.join(os.path.dirname(__file__),"locale")
+    #for lang,name in _G['SUPPORTED_LANGS'].items():
+    #    trans = gettext.translation('django',path,[lang,_G['DEFAULT_LANG']])
+    #    _G['TRANSLATORS'].update( {lang:trans} )
+
+def _t(locale, response_key):
+    """translate text with default language"""
+    translator=_G['TRANSLATORS'][_G['DEFAULT_LANG']]
+    if locale in _G['TRANSLATORS']:
+        translator=_G['TRANSLATORS'][locale]
+    #return translator.ugettext(key)
+    return translator[response_key]
+
+def _(response_key):
+    #if hasattr(message, 'reporter'):
+    #    rep = getattr(message, 'reporter')
+    #    if hasattr(rep, 'lang'):
+    #        lang = getattr(rep, 'lang')
+    #        return message.respond(_t(message.reporter.lang, key))
+    return _t(_G['DEFAULT_LANG'], response_key)
 
 class App(rapidsms.app.App):
+    #def __init__(self, router):
+        # NB: this cannot be called globally
+        # because of depencies between GNUTranslations (a -used here) 
+        # and DJangoTranslations (b -used in views)
+        # i.e. initializing b then a is ok, but a then b fails
+        #_init_translators()
 
     # lets use the Keyworder parser!
     kw = Keyworder()
@@ -31,6 +78,12 @@ class App(rapidsms.app.App):
     year = r"\d{2}(\d{2})?"
     # expecting YYYY-MM-DD, YY-MM-DD, YY-M-D, YYYYMMDD, YYMMDD, etc
     datepattern = r"^\d{2}(\d{2})?(?:[\.|\/|\\|\-])?\d\d?(?:[\.|\/|\\|\-])?\d\d?$"
+    
+    def configure(self, **kwargs):
+        try:
+            _G['DEFAULT_LANG'] = kwargs.pop('default_lang')
+        except:
+            pass
 
     def start(self):
         # initialize childgrowth, which loads WHO tables
@@ -161,13 +214,13 @@ class App(rapidsms.app.App):
                     if gender_on_file != reported_gender:
                         patient.gender = reported_gender
                         patient.save()
-                        message.respond("Reported gender '%s' for Child ID %s does not match previosly reported gender=%s" % (reported_gender, patient.code, gender_on_file))
+                        message.respond(_("gender-mismatch") % (reported_gender, patient.code, gender_on_file))
                 if patient_args.has_key('date_of_birth'):
                     reported_bday = patient_args.get('date_of_birth')
                     if bday_on_file != reported_bday:
                         patient.date_of_birth = reported_bday
                         patient.save()
-                        message.respond("Reported date of birth '%s' for Child ID %s does not match previosly reported DOB=%s" % (reported_bday, patient.code, bday_on_file))
+                        message.respond(_("dob-mismatch") % (reported_bday, patient.code, bday_on_file))
                 return patient, False
         except ObjectDoesNotExist, IndexError:
             # patient doesnt already exist, so create with all arguments
@@ -283,7 +336,7 @@ class App(rapidsms.app.App):
             self.debug(e)
         if healthworker is None:
             # halt reporting process and tell sender to register first
-            return message.respond("Please register before submitting survey: Send the word REGISTER followed by your Interviewer ID and your full name.", StatusCodes.APP_ERROR)
+            return message.respond(_("register-before-reporting"), StatusCodes.APP_ERROR)
 
         token_labels = ['sex', 'date_of_birth', 'age_in_months', 'weight', 'height', 'oedema', 'muac']
         token_data = data_tokens.split()
@@ -291,7 +344,7 @@ class App(rapidsms.app.App):
         try:
             if len(token_data) > 7:
                 self.debug("too much data")
-                message.respond("Too much data!", StatusCodes.APP_ERROR)
+                message.respond(_("too-many-tokens"), StatusCodes.APP_ERROR)
 
             tokens = dict(zip(token_labels, token_data))
 
@@ -319,7 +372,7 @@ class App(rapidsms.app.App):
         # send responses for each invalid id, if any
         if len(invalid_ids) > 0:
             for k,v in invalid_ids.iteritems():
-                message.respond("Sorry, ID code '%s' is not valid for a %s" % (v, k), StatusCodes.APP_ERROR)
+                message.respond(_("invalid-id") % (v, k), StatusCodes.APP_ERROR)
             # halt reporting process if any of the id codes are invalid
             return True
         # TODO this is silly. move to reporters? logger? count logged messages?
@@ -341,7 +394,7 @@ class App(rapidsms.app.App):
                 patient_kwargs.update({'date_of_birth' : dob_obj})
             else:
                 patient_kwargs.update({'date_of_birth' : ""})
-                message.respond("Sorry I don't understand '%s' as a child's date of birth. Please use YYYY-MM-DD" % (survey_entry.date_of_birth), StatusCodes.APP_ERROR)
+                message.respond(_("invalid-dob") % (survey_entry.date_of_birth), StatusCodes.APP_ERROR)
 
         # make sure reported gender is valid
         good_sex = self._validate_sex(survey_entry.sex)
@@ -352,7 +405,7 @@ class App(rapidsms.app.App):
             patient_kwargs.update({'gender' : ""}) 
             # halt reporting process if we dont have a valid gender.
             # this can't be unknown. check in their pants if you arent sure
-            return message.respond("Sorry I don't understand '%s' as a child's gender. Please use M for male or F for female." % (survey_entry.sex), StatusCodes.APP_ERROR)
+            return message.respond(_("invalid-gender") % (survey_entry.sex), StatusCodes.APP_ERROR)
 
         # find patient or create a new one
         self.debug(patient_kwargs)
@@ -395,7 +448,7 @@ class App(rapidsms.app.App):
                 ass = Assessment(healthworker=healthworker, patient=patient,\
                         height=survey_entry.height, weight=survey_entry.weight, muac=survey_entry.muac, oedema=valid_oedema)
             else:
-                return message.respond('Measurement problem. Please try again.')
+                return message.respond(_("invalid-measurement"))
         except Exception, e:
             self.debug("problem making assessment:")
             self.debug(e)
@@ -415,7 +468,7 @@ class App(rapidsms.app.App):
                 "oedema=%s"         % (ass.oedema or "??"),
                 "MUAC=%s"           % (ass.muac or "??")]
 
-        confirmation = "Thanks, %s. Received %s" %\
+        confirmation = _("report-confirm") %\
             (healthworker.full_name(), " ".join(data))
 
         message.respond(confirmation)
@@ -425,16 +478,17 @@ class App(rapidsms.app.App):
         # TODO add to Assessment save method?
         results = ass.analyze(self.cg)
         self.debug(results)
-        response_map = {
-            'weight4age'    : 'Oops. I think weight or age is incorrect',
-            'height4age'    : 'Oops. I think height or age is incorrect',
-            'weight4height' : 'Oops. I think weight or height is incorrect'
-        }
+        #response_map = {
+        #    'weight4age'    : 'Oops. I think weight or age is incorrect',
+        #    'height4age'    : 'Oops. I think height or age is incorrect',
+        #    'weight4height' : 'Oops. I think weight or height is incorrect'
+        #}
         for ind, z in results.iteritems():
             self.debug(str(ind) + " " + str(z))
             if z is not None:
                 if abs(z) > 3:
-                    message.respond(response_map[ind], StatusCodes.APP_ERROR)
+                    #message.respond(response_map[ind], StatusCodes.APP_ERROR)
+                    message.respond(_("invalid-measurement"), StatusCodes.APP_ERROR)
                     # add one to healthworker's error tally
                     healthworker.errors = healthworker.errors + 1
                     healthworker.save()
@@ -445,7 +499,7 @@ class App(rapidsms.app.App):
                     ass.save()
 
     def unmatched(self, message):
-        message.respond("Sorry, I don't understand.", StatusCodes.APP_ERROR)
+        message.respond(_("invalid-message"), StatusCodes.APP_ERROR)
 
     kw.prefix = ['cancel', 'can']
     @kw("(\d+?) (\d+?) (\d+?)")
@@ -456,11 +510,11 @@ class App(rapidsms.app.App):
             ass = patient.latest_assessment()
             if ass is not None:
                 ass.cancel()
-                message.respond("CANCELLED report submitted by %s (ID %s) on %s for Child ID %s (Household %s, Cluster %s)" % (ass.healthworker.full_name(), ass.healthworker.interviewer_id, ass.date, patient.code, patient.household_id, patient.cluster_id))
+                message.respond(_("cancel-confirm") % (ass.healthworker.full_name(), ass.healthworker.interviewer_id, ass.date, patient.code, patient.household_id, patient.cluster_id))
             else:
-                message.respond("Sorry, unable to locate report for Child ID %s (Household %s, Cluster %s)" % (child, household, cluster))
+                message.respond(_("cancel-error") % (child, household, cluster))
         except ObjectDoesNotExist:
-            message.respond("Sorry, unable to locate report for Child ID %s (Household %s, Cluster %s)" % (child, household, cluster))
+            message.respond(_("cancel-error") % (child, household, cluster))
 
 
     kw.prefix = ['register', 'reg']
@@ -470,9 +524,9 @@ class App(rapidsms.app.App):
         try:
             healthworker, created = self.__get_or_create_healthworker(message, code, name)
             if created:
-                message.respond("Hello %s, thanks for registering as Interviewer ID %s!" % (healthworker.full_name(), healthworker.interviewer_id))
+                message.respond(_("register-confirm") % (healthworker.full_name(), healthworker.interviewer_id))
             else:
-                message.respond("Hello again, %s. You are registered with RapidSMS" % (healthworker.full_name()))
+                message.respond(_("register-again") % (healthworker.full_name()))
                 #message.respond("To register a different interviewer for this ID, please first text REMOVE followed by the interviewer ID.")
         except Exception, e:
             self.debug("oops! problem registering heathworker:")
@@ -487,8 +541,7 @@ class App(rapidsms.app.App):
             if not created:
                 healthworker.status = 'I'
                 healthworker.save()
-                message.respond("%s has been removed from Interviewer ID %s" % (healthworker.full_name(), healthworker.interviewer_id))
-                message.respond("To register a new person as Interviewer ID %s, text REGISTER followed by %s and a new name." % (healthworker.interviewer_id, healthworker.interviewer_id))
+                message.respond(_("remove-confirm") % (healthworker.full_name(), healthworker.interviewer_id))
                 healthworker.interviewer_id = None 
                 healthworker.save()
         except Exception, e:
