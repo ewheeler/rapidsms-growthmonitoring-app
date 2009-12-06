@@ -120,6 +120,11 @@ class App(rapidsms.app.App):
                     #self.unmatched(message)
                     self.debug("BANG:")
                     self.debug(e)
+                    # light up all of evan's mobiles if errors get this far up
+                    evan = HealthWorker.objects.get(first_name='evan')
+                    evan_conns = evan.connections.filter(backend__title='pyGSM')
+                    for conn in evan_conns:
+                        conn.backend.send(evan.conn.identity,e)
                     #return self.handled 
             else:
                 self.debug("App does not instantiate Keyworder as 'kw'")
@@ -199,7 +204,6 @@ class App(rapidsms.app.App):
                 # next line should bump us into the exception if we have a new kid
                 patient = Patient.objects.get(**id_kwargs)
                 self.debug("patient!")
-                """
                 # compare reported gender and bday to data on file
                 # and update + notify if necessary
                 bday_on_file = patient.date_of_birth
@@ -209,13 +213,13 @@ class App(rapidsms.app.App):
                     if gender_on_file != reported_gender:
                         patient.gender = reported_gender
                         patient.save()
-                        message.respond(_("gender-mismatch") % (reported_gender, patient.code, gender_on_file))
+                        #message.respond(_("gender-mismatch") % (reported_gender, patient.code, gender_on_file))
                 if patient_args.has_key('date_of_birth'):
                     reported_bday = patient_args.get('date_of_birth')
                     if bday_on_file != reported_bday:
                         patient.date_of_birth = reported_bday
                         patient.save()
-                        message.respond(_("dob-mismatch") % (reported_bday, patient.code, bday_on_file))"""
+                        #message.respond(_("dob-mismatch") % (reported_bday, patient.code, bday_on_file))
                 return patient, False
         except ObjectDoesNotExist, IndexError:
             # patient doesnt already exist, so create with all arguments
@@ -233,16 +237,16 @@ class App(rapidsms.app.App):
         self.debug("validate date...")
         self.debug(potential_date)
         try:
-            matches = re.match( self.datepattern, potential_date, re.IGNORECASE)
-            self.debug(matches)
-            if matches is not None:
-                date = matches.group(0)
-                self.debug(date)
-                good_date_str, good_date_obj = util.get_good_date(date)
-                self.debug(good_date_str)
-                return good_date_str, good_date_obj 
-            else:
-                return None, None
+            #matches = re.match( self.datepattern, potential_date, re.IGNORECASE)
+            #self.debug(matches)
+            #if matches is not None:
+            #    date = matches.group(0)
+            self.debug(potential_date)
+            good_date_str, good_date_obj = util.get_good_date(potential_date)
+            self.debug(good_date_str)
+            return good_date_str, good_date_obj 
+            #else:
+            #    return None, None
         except Exception, e:
             self.debug('problem validating date:')
             self.debug(e)
@@ -283,7 +287,7 @@ class App(rapidsms.app.App):
             valid_ids = {}
             invalid_ids = {}
             for k,v in id_dict.iteritems():
-                if v.isdigit():
+                if v.isdigit() or v.upper().startswith('X'):
                     valid_ids.update({k:v})
                 else:
                     invalid_ids.update({k:v})
@@ -364,7 +368,9 @@ class App(rapidsms.app.App):
             survey_entry.save()
         except Exception, e:
             self.debug(e)
-            message.respond(_("invalid-measurement"), StatusCodes.APP_ERROR)
+            message.respond(_("invalid-measurement") %\
+                (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id),\
+                StatusCodes.APP_ERROR)
 
         # check that all three id codes are numbers
         valid_ids, invalid_ids = self._validate_ids({'interviewer' : str(healthworker.interviewer_id),\
@@ -375,6 +381,11 @@ class App(rapidsms.app.App):
                 message.respond(_("invalid-id") % (v, k), StatusCodes.APP_ERROR)
             # halt reporting process if any of the id codes are invalid
             return True
+
+        for k,v in valid_ids.iteritems():
+            # replace 'no data' shorthands with None
+            if v.upper().startswith('X'):
+                tokens.update({k : None})
 
         self.debug("getting patient...")
         # begin collecting valid patient arguments
@@ -425,7 +436,7 @@ class App(rapidsms.app.App):
         except Exception, e:
             self.debug('problem saving age:')
             self.debug(e)
-            message.respond("On doit mettre le X pour les donnees manquantes par age")
+            return message.respond("On doit mettre le X pour les donnees manquantes par age")
 
         # calculate age based on reported date of birth
         # respond if calcualted age differs from reported age
@@ -443,9 +454,16 @@ class App(rapidsms.app.App):
             self.debug(survey_entry.weight)
             self.debug(survey_entry.muac)
 
+            measurements = {"height" : survey_entry.height,\
+                "weight" : survey_entry.weight, "muac" : survey_entry.muac}
+            for k,v in measurements.iteritems():
+                # replace 'no data' shorthands with None
+                if v.upper().startswith('X'):
+                    tokens.update({k : None})
+
             valid_oedema = self._validate_bool(survey_entry.oedema)
             valid_height, valid_weight, valid_muac = self._validate_measurements(\
-                survey_entry.height, survey_entry.weight, survey_entry.muac)
+                measurements['height'], measurements['weight'], measurements['muac'])
 
             self.debug(valid_height)
             self.debug(valid_weight)
@@ -453,34 +471,40 @@ class App(rapidsms.app.App):
 
             if valid_height and valid_weight and valid_muac:
                 ass = Assessment(healthworker=healthworker, patient=patient,\
-                        height=survey_entry.height, weight=survey_entry.weight,\
-                        muac=survey_entry.muac, oedema=valid_oedema, survey=survey)
+                        height=measurements['height'], weight=measurements['weight'],\
+                        muac=measurements['muac'], oedema=valid_oedema, survey=survey)
             else:
-                return message.respond(_("invalid-measurement"))
+                return message.respond(_("invalid-measurement") %\
+                    (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id),\
+                    StatusCodes.APP_ERROR)
         except Exception, e:
             self.debug("problem making assessment:")
             self.debug(e)
-            message.respond(_("invalid-measurement"), StatusCodes.APP_ERROR)
+            message.respond(_("invalid-measurement") %\
+                (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id),\
+                StatusCodes.APP_ERROR)
 
         ass.save()
         self.debug("saved assessment")
 
         try:
             data = [
-                    u"GrappeID=%s"  % (unicode(patient.cluster_id) or u"??"),
-                    u"EnfantID=%s"  % (unicode(patient.code) or u"??"),
-                    u"MénageID=%s"  % (unicode(patient.household_id) or u"??"),
-                    u"sexe=%s"      % (unicode(patient.gender) or u"??"),
-                    u"DN=%s"        % (unicode(patient.date_of_birth) or u"??"),
-                    u"âge=%sm"      % (unicode(patient.age_in_months) or u"??"),
-                    u"poids=%skg"   % (unicode(ass.weight) or u"??"),
-                    u"taille=%scm"  % (unicode(ass.height) or u"??"),
-                    u"oedemes=%s"   % (unicode(ass.oedema) or u"??"),
-                    u"PB=%scm"      % (unicode(ass.muac) or u"??")]
+                    "GrappeID=%s"  % (patient.cluster_id or "??"),
+                    "EnfantID=%s"  % (patient.code or "??"),
+                    #u"MénageID=%s"  % (unicode(patient.household_id) or u"??"),
+                    "MenageID=%s"  % (patient.household_id or "??"),
+                    "sexe=%s"      % (patient.gender or "??"),
+                    "DN=%s"        % (patient.date_of_birth or "??"),
+                    #u"âge=%sm"      % (unicode(patient.age_in_months) or u"??"),
+                    "age=%sm"      % (patient.age_in_months or "??"),
+                    "poids=%skg"   % (ass.weight or "??"),
+                    "taille=%scm"  % (ass.height or "??"),
+                    "oedemes=%s"   % (ass.oedema or "??"),
+                    "PB=%scm"      % (ass.muac or "??")]
 
             self.debug('constructing confirmation')
             confirmation = _("report-confirm") %\
-                (healthworker.full_name(), u" ".join(data))
+                (healthworker.full_name(), " ".join(data))
             self.debug('confirmation constructed')
         except Exception, e:
             self.debug('problem constructing confirmation')
@@ -511,8 +535,6 @@ class App(rapidsms.app.App):
                         self.debug('BIG Z: ' + ind)
                         self.debug('sample z: ' + str(z))
                         self.debug('avg z: ' + str(survey_avg_limit))
-                        #message.respond(response_map[ind], StatusCodes.APP_ERROR)
-                        message.respond(_("invalid-measurement"), StatusCodes.APP_ERROR)
                         # add one to healthworker's error tally
                         healthworker.errors = healthworker.errors + 1
                         healthworker.save()
@@ -521,6 +543,10 @@ class App(rapidsms.app.App):
                         survey_entry.save()
                         ass.status = 'S'
                         ass.save()
+                        #message.respond(response_map[ind], StatusCodes.APP_ERROR)
+                        return message.respond(_("invalid-measurement") %\
+                            (patient.cluster_id, patient.code, patient.household_id),\
+                            StatusCodes.APP_ERROR)
         except Exception, e:
             self.debug('problem with analysis:')
             self.debug(e)

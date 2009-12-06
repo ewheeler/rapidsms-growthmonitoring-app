@@ -21,6 +21,23 @@ FAKE_GETTEXT = {
         },
 
         "fr" : {
+            "gender-mismatch":"Reported gender '%s' for Child ID %s does not match previously reported gender=%s",
+            "dob-mismatch":"Reported date of birth '%s' for Child ID %s does not match previosly reported DOB=%s",
+            "register-before-reporting":"Enregistrez l\'apareil SVP",
+            "too-many-tokens":"Le format n\'est pas bon, Revisez SVP",
+            "invalid-id":"Le code '%s' n\'est pas bon pour %s",
+            "invalid-dob":"La date '%s' n\'est pas bonne. Utilisez JJMMAA SVP.",
+            "invalid-gender":"La reponse '%s' n\'est pas bonne pour sexe d\'enfant. Utilisez M ou F SVP.",
+            "invalid-measurement":"Verifiez l\'age et mesures et renvoyer SVP. Grappe %s Enfant %s Menage %s",
+            "report-confirm":u"Merci, %s. Bien recu %s",
+            "invalid-message":u"Format d\'envoi non valide.",
+            "cancel-confirm":u"ANNULE donnees %s (ID %s) sur %s Grappe %s Enfant %s Menage %s",
+            "cancel-error":u"Verifiez ID enfant et renvoyer SVP - Grappe %s Enfant %s Menage %s",
+            "register-confirm":u"Bonjour %s, Vous etes enregistre avec le numero d\'ID %s!",
+            "register-again":u"Salut, %s. Vous etes enregistre deja avec RapidSMS",
+            "remove-confirm":u"%s a ete enleve du numero d\'ID %s"
+        },
+        "fr-utf-8" : {
             "gender-mismatch":u"Reported gender '%s' for Child ID %s does not match previously reported gender=%s",
             "dob-mismatch":u"Reported date of birth '%s' for Child ID %s does not match previosly reported DOB=%s",
             "register-before-reporting":u"Enregistrez l\'apareil SVP",

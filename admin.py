@@ -8,7 +8,7 @@ class AssessmentInline(admin.TabularInline):
     model = Assessment
 
 class HealthWorkerAdmin(admin.ModelAdmin):
-    list_display = ('first_name', 'last_name', 'errors',\
+    list_display = ('first_name', 'last_name', 'interviewer_id', 'errors',\
         'connection', 'last_seen')
     search_fields = ('first_name', 'last_name', 'alias', 'connection')
     inlines = [AssessmentInline, ]
