@@ -136,7 +136,7 @@ class App(rapidsms.app.App):
             self.debug("REPORTER PRESENT")
             self.debug(msg.persistance_dict)
             if msg.persistance_dict.has_key('reporter'):
-                # if healthworker is already registered return him/her
+                # if healthworker is already registered on this connection, return him/her
                 healthworker = HealthWorker.objects.get(pk=msg.persistance_dict['reporter'].pk)
                 return healthworker, False
             if not msg.persistance_dict.has_key('reporter'):
@@ -144,16 +144,20 @@ class App(rapidsms.app.App):
                 self.debug("no healthworker")
                 if interviewer_id is not None:
                     try:
+                        # find healthworker via interviewer_id and add new connection
+                        # (e.g., registering from a second connection)
                         healthworker = HealthWorker.objects.get(interviewer_id=interviewer_id)
                         per_con = msg.persistance_dict['connection']
                         # giving per_con.reporter healthworker
                         # from above doesnt seem to work..
-                        per_con.reporter=Reporter.objects.get(pk=healthworker.pk)
+                        #per_con.reporter=Reporter.objects.get(pk=healthworker.pk)
+                        per_con.reporter = healthworker
                         per_con.save()
                         return healthworker, False
                     except ObjectDoesNotExist, MultipleObjectsReturned:
                         try:
                             # parse the name, and create a healthworker/reporter
+                            # (e.g., registering from first connection)
                             alias, first, last = Reporter.parse_name(name)
                             healthworker = HealthWorker(
                                 first_name=first, last_name=last, alias=alias,
@@ -163,7 +167,8 @@ class App(rapidsms.app.App):
                             per_con = msg.persistance_dict['connection']
                             # giving per_con.reporter healthworker
                             # from above doesnt seem to work..
-                            per_con.reporter=Reporter.objects.get(pk=healthworker.pk)
+                            #per_con.reporter=Reporter.objects.get(pk=healthworker.pk)
+                            per_con.reporter = healthworker
                             per_con.save()
 
                             return healthworker, True
