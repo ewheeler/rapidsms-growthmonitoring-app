@@ -107,6 +107,11 @@ class App(rapidsms.app.App):
                                 interviewer_id=interviewer_id, registered_self=True,
                                 message_count=1, language=lang)
                             healthworker.save()
+                            per_con = msg.persistance_dict['connection']
+                            # giving per_con.reporter healthworker
+                            # from above doesnt seem to work..
+                            per_con.reporter=Reporter.objects.get(pk=healthworker.pk)
+                            per_con.save()
 
                             return healthworker, True
 
