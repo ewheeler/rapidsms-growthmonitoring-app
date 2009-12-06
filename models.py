@@ -1,5 +1,5 @@
-#!/usr/bin/env pytho]
-# vim: ai ts=4 sts=4 et sw=4
+#!/usr/bin/env python
+# vim: ai ts=4 sts=4 et sw=4 encoding=utf-8
 
 from datetime import datetime, date, timedelta
 from decimal import Decimal as D
@@ -24,6 +24,8 @@ class HealthWorker(Reporter):
         ('I', 'Inactive'),
     )
     last_updated           = models.DateTimeField(auto_now=True)
+    # counter for measurement errors, not poor texting skills
+    # incremented only when z-scores indicate unreasonable measurements
     errors                 = models.IntegerField(max_length=5,default=0) 
     status                 = models.CharField(max_length=1,choices=HW_STATUS_CHOICES,default='A')
     interviewer_id          = models.PositiveIntegerField(max_length=10, blank=True, null=True)
@@ -114,7 +116,7 @@ class Assessment(models.Model):
     height              = models.DecimalField(max_digits=4,decimal_places=1,blank=True,null=True)
     weight              = models.DecimalField(max_digits=4,decimal_places=1,blank=True,null=True)
     muac                = models.DecimalField(max_digits=6,decimal_places=2,blank=True,null=True)
-    oedema              = models.BooleanField(default=False)
+    oedema              = models.NullBooleanField(default=False)
     #diarrea             = models.BooleanField(default=False)
 
     # expensive calculations 
@@ -159,10 +161,10 @@ class Assessment(models.Model):
         if age is not None:
             if self.weight is not None:
                 self.weight4age = childgrowth.zscore_for_measurement(\
-                                "wfa", self.weight, age, gender)
+                                "wfa", self.weight, D(age), gender)
             if self.height is not None:
                 self.height4age = childgrowth.zscore_for_measurement(\
-                                "lhfa", self.height, age, gender)
+                                "lhfa", self.height, D(age), gender)
 
         # determine whether to use weight-for-length or weight-for-height
         # based on age. TODO accept a parameter indicating whether child
@@ -170,10 +172,10 @@ class Assessment(models.Model):
         if self.weight is not None and self.height is not None:
             if age <= 24:
                 self.weight4height = childgrowth.zscore_for_measurement(\
-                            "wfl", self.weight, age, gender, self.height)
+                            "wfl", self.weight, D(age), gender, self.height)
             elif age > 24:
                 self.weight4height = childgrowth.zscore_for_measurement(\
-                            "wfh", self.weight, age, gender, self.height)
+                            "wfh", self.weight, D(age), gender, self.height)
             else:
                 pass
         self.save()
@@ -250,8 +252,13 @@ class Survey(models.Model):
     location                = models.CharField(max_length=160,blank=True,null=True)
     description             = models.CharField(max_length=160,blank=True,null=True)
 
+    # these should come from the latest survey completed in the
+    # same season
+    # -1.27
     baseline_weight4age     = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
+    # -0.98
     baseline_height4age     = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
+    # -0.79
     baseline_weight4height  = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
 
     avg_weight4age          = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
@@ -263,37 +270,49 @@ class Survey(models.Model):
 
     def update_avg_zscores(self):
         context = decimal.getcontext()
-        survey_assessments = self.assessment_set.all()
-        sample_avg_weigh4age = survey_assessments.aggregate(avg_w4a=Avg('weight4age'))["avg_w4a"]
+        survey_assessments = self.assessment_set.filter(status='G')
+        sample_avg_weight4age = survey_assessments.aggregate(avg_w4a=Avg('weight4age'))["avg_w4a"]
         sample_avg_height4age = survey_assessments.aggregate(avg_h4a=Avg('height4age'))["avg_h4a"]
         sample_avg_weight4height = survey_assessments.aggregate(avg_w4h=Avg('weight4height'))["avg_w4h"]
 
         # calculate survey's avg_weight4height, avg_height4age, and avg_weight4age
         # these averages are seeded with a baseline z-score given the
         # weight of 30 entries
-        if self.baseline_weight4age is not None: 
-            # (baseline z-score * 30) + avg z-score of survey's assessments
-            weighted_avg_weight4age_numerator = context.add(context.multiply(\
-                self.baseline_weight4age, D(30)), sample_avg_weight4age) 
-            # 30 + number of survey's assessments that are not none
-            weighted_avg_weight4age_denomenator = context.add(D(30),\
-                survey_assessments.exclude(weight4age=None).count())
-            # divide and limit to hundreths place
-            self.avg_weight4age = context.divide(weighted_avg_weight4age_numerator,\
-                weighted_avg_weight4age_denomenator).quantize(D('.01'))
+        if survey_assessments.count() > 0:
+            if self.baseline_weight4age is not None: 
+                # (baseline z-score * 30) + avg z-score of survey's assessments
+                weighted_avg_weight4age_numerator = context.add(context.multiply(\
+                    self.baseline_weight4age, D(30)), D(str(sample_avg_weight4age))) 
+                # 30 + number of survey's assessments that are not none
+                weighted_avg_weight4age_denomenator = context.add(D(30),\
+                    D(survey_assessments.exclude(weight4age=None).count()))
+                # divide and limit to hundreths place
+                self.avg_weight4age = context.divide(weighted_avg_weight4age_numerator,\
+                    weighted_avg_weight4age_denomenator).quantize(D('.01'))
 
-        if self.baseline_height4age is not None:
-            weighted_avg_height4age_numerator = context.add(context.multiply(\
-                self.baseline_height4age, D(30)), sample_avg_height4age) 
-            weighted_avg_height4age_denomenator = context.add(D(30),\
-                survey_assessments.exclude(height4age=None).count())
-            self.avg_height4age = context.divide(weighted_avg_height4age_numerator,\
-                weighted_avg_height4age_denomenator).quantize(D('.01'))
+            if self.baseline_height4age is not None:
+                weighted_avg_height4age_numerator = context.add(context.multiply(\
+                    self.baseline_height4age, D(30)), D(str(sample_avg_height4age))) 
+                weighted_avg_height4age_denomenator = context.add(D(30),\
+                    D(survey_assessments.exclude(height4age=None).count()))
+                self.avg_height4age = context.divide(weighted_avg_height4age_numerator,\
+                    weighted_avg_height4age_denomenator).quantize(D('.01'))
 
-        if self.baseline_weight4height is not None:
-            weighted_avg_weight4height_numerator = context.add(context.multiply(\
-                self.baseline_weight4height, D(30)), sample_avg_weight4height) 
-            weighted_avg_weight4height_denomenator = context.add(D(30),\
-                survey_assessments.exclude(weight4height=None).count())
-            self.avg_weight4height = context.divide(weighted_avg_weight4height_numerator,\
-                weighted_avg_weight4height_denomenator).quantize(D('.01'))
+            if self.baseline_weight4height is not None:
+                weighted_avg_weight4height_numerator = context.add(context.multiply(\
+                    self.baseline_weight4height, D(30)), D(str(sample_avg_weight4height))) 
+                weighted_avg_weight4height_denomenator = context.add(D(30),\
+                    D(survey_assessments.exclude(weight4height=None).count()))
+                self.avg_weight4height = context.divide(weighted_avg_weight4height_numerator,\
+                    weighted_avg_weight4height_denomenator).quantize(D('.01'))
+            # i dont remember if i have to do this here
+            self.save()
+            return self.avg_zscores_dict()
+        else:
+            return None
+
+    def avg_zscores_dict(self):
+        return {'weight4age'    : self.avg_weight4age,
+                'height4age'    : self.avg_height4age,
+                'weight4height' : self.avg_weight4height
+                }

@@ -2,6 +2,7 @@
 # vim: ai ts=4 sts=4 et sw=4 encoding=utf-8
 
 from datetime import date, datetime
+from decimal import Decimal as D
 import time
 import gettext
 
@@ -129,57 +130,46 @@ class App(rapidsms.app.App):
             # self.error(e) 
 	    pass
 
+    def __identify_healthworker(self, msg):
+        if msg.persistance_dict.has_key('reporter'):
+            # if healthworker is already registered on this connection, return him/her
+            healthworker = HealthWorker.objects.get(pk=msg.persistance_dict['reporter'].pk)
+            return healthworker
+        else:
+            return None
 
-    def __get_or_create_healthworker(self, msg, interviewer_id=None, name=None, lang='fr'):
-        self.debug("finding worker...")
-        if hasattr(msg, "reporter"):
-            self.debug("REPORTER PRESENT")
-            self.debug(msg.persistance_dict)
-            if msg.persistance_dict.has_key('reporter'):
-                # if healthworker is already registered on this connection, return him/her
-                healthworker = HealthWorker.objects.get(pk=msg.persistance_dict['reporter'].pk)
-                return healthworker, False
-            if not msg.persistance_dict.has_key('reporter'):
-                #self.debug(e)
-                self.debug("no healthworker")
-                if interviewer_id is not None:
-                    try:
-                        # find healthworker via interviewer_id and add new connection
-                        # (e.g., registering from a second connection)
-                        healthworker = HealthWorker.objects.get(interviewer_id=interviewer_id)
-                        per_con = msg.persistance_dict['connection']
-                        # giving per_con.reporter healthworker
-                        # from above doesnt seem to work..
-                        #per_con.reporter=Reporter.objects.get(pk=healthworker.pk)
-                        per_con.reporter = healthworker
-                        per_con.save()
-                        return healthworker, False
-                    except ObjectDoesNotExist, MultipleObjectsReturned:
-                        try:
-                            # parse the name, and create a healthworker/reporter
-                            # (e.g., registering from first connection)
-                            alias, first, last = Reporter.parse_name(name)
-                            healthworker = HealthWorker(
-                                first_name=first, last_name=last, alias=alias,
-                                interviewer_id=interviewer_id, registered_self=True,
-                                message_count=1, language=lang)
-                            healthworker.save()
-                            per_con = msg.persistance_dict['connection']
-                            # giving per_con.reporter healthworker
-                            # from above doesnt seem to work..
-                            #per_con.reporter=Reporter.objects.get(pk=healthworker.pk)
-                            per_con.reporter = healthworker
-                            per_con.save()
+    def __register_healthworker(self, msg, interviewer_id, name, lang='fr'):
+        try:
+            # find healthworker via interviewer_id and add new connection
+            # (e.g., registering from a second connection)
+            alias, first, last = Reporter.parse_name(name)
+            healthworker = HealthWorker.objects.get(interviewer_id=interviewer_id,\
+                first_name=first, last_name=last)
+            per_con = msg.persistance_dict['connection']
+            per_con.reporter = healthworker
+            per_con.save()
+            return healthworker, False
+        except ObjectDoesNotExist, MultipleObjectsReturned:
+            try:
+                # TODO remove conneciton from previous hw
+                # parse the name, and create a healthworker/reporter
+                # (e.g., registering from first connection)
+                alias, first, last = Reporter.parse_name(name)
+                healthworker = HealthWorker(
+                    first_name=first, last_name=last, alias=alias,
+                    interviewer_id=interviewer_id, registered_self=True,
+                     language=lang)
+                healthworker.save()
+                per_con = msg.persistant_connection
+                per_con.reporter = healthworker
+                per_con.save()
+                return healthworker, True
+            # something went wrong - at the
+            # moment, we don't care what
+            except Exception, e:
+                self.debug('problem registering worker:')
+                self.debug(e)
 
-                            return healthworker, True
-
-                        # something went wrong - at the
-                        # moment, we don't care what
-                        except Exception, e:
-                            self.debug('problem finding worker:')
-                            self.debug(e)
-                else:
-                    return None, False
 
 
     def __get_or_create_patient(self, message, **kwargs):
@@ -209,7 +199,7 @@ class App(rapidsms.app.App):
                 # next line should bump us into the exception if we have a new kid
                 patient = Patient.objects.get(**id_kwargs)
                 self.debug("patient!")
-
+                """
                 # compare reported gender and bday to data on file
                 # and update + notify if necessary
                 bday_on_file = patient.date_of_birth
@@ -225,7 +215,7 @@ class App(rapidsms.app.App):
                     if bday_on_file != reported_bday:
                         patient.date_of_birth = reported_bday
                         patient.save()
-                        message.respond(_("dob-mismatch") % (reported_bday, patient.code, bday_on_file))
+                        message.respond(_("dob-mismatch") % (reported_bday, patient.code, bday_on_file))"""
                 return patient, False
         except ObjectDoesNotExist, IndexError:
             # patient doesnt already exist, so create with all arguments
@@ -309,18 +299,17 @@ class App(rapidsms.app.App):
         valid_muac = False
         try:
             if height is not None:
-                if 44.5 < float(height) < 120.4:
+                if 40.0 < float(height) < 125.0:
                     valid_height = True
             else:
                 valid_height = True
             if weight is not None:
-                if 3.0 < float(weight) < 20.0:
+                if 1.5 < float(weight) < 35.0:
                     valid_weight = True
             else:
                 valid_weight = True
             if muac is not None:
-                # TODO i made these up. cm or mm??
-                if 10.0 < float(muac) < 150.0:
+                if 10.0 < float(muac) < 22.0:
                     valid_muac = True
             else:
                 valid_muac = True
@@ -342,7 +331,7 @@ class App(rapidsms.app.App):
             return message.respond("No active survey at this date")
         try:
             # find out who is submitting this report
-            healthworker, created = self.__get_or_create_healthworker(message)
+            healthworker = self.__identify_healthworker(message)
         except Exception, e:
             self.debug(e)
         if healthworker is None:
@@ -360,7 +349,6 @@ class App(rapidsms.app.App):
             tokens = dict(zip(token_labels, token_data))
 
             for k,v in tokens.iteritems():
-                print v
                 # replace 'no data' shorthands with None
                 if v.upper() in ['X', 'XX', 'XXX']:
                     tokens.update({k : None})
@@ -376,6 +364,7 @@ class App(rapidsms.app.App):
             survey_entry.save()
         except Exception, e:
             self.debug(e)
+            message.respond(_("invalid-measurement"), StatusCodes.APP_ERROR)
 
         # check that all three id codes are numbers
         valid_ids, invalid_ids = self._validate_ids({'interviewer' : str(healthworker.interviewer_id),\
@@ -416,18 +405,27 @@ class App(rapidsms.app.App):
             # this can't be unknown. check in their pants if you arent sure
             return message.respond(_("invalid-gender") % (survey_entry.gender), StatusCodes.APP_ERROR)
 
-        # find patient or create a new one
-        self.debug(patient_kwargs)
-        patient, created = self.__get_or_create_patient(message, **patient_kwargs)
+        try:
+            # find patient or create a new one
+            self.debug(patient_kwargs)
+            patient, created = self.__get_or_create_patient(message, **patient_kwargs)
+        except Exception, e:
+            self.debug('problem saving patient')
+            self.debug(e)
 
-        # update age separately (should be the only volitile piece of info)
-        self.debug(survey_entry.age_in_months)
-        if survey_entry.age_in_months is not None:
-            patient.age_in_months = survey_entry.age_in_months
-        else:
-            patient.age_in_months = util.sloppy_date_to_age_in_months(patient.date_of_birth)
-        self.debug(patient.age_in_months)
-        patient.save()
+        try:
+            # update age separately (should be the only volitile piece of info)
+            self.debug(survey_entry.age_in_months)
+            if survey_entry.age_in_months is not None:
+                patient.age_in_months = int(survey_entry.age_in_months)
+            else:
+                patient.age_in_months = util.sloppy_date_to_age_in_months(patient.date_of_birth)
+            self.debug(patient.age_in_months)
+            patient.save()
+        except Exception, e:
+            self.debug('problem saving age:')
+            self.debug(e)
+            message.respond("On doit mettre le X pour les donnees manquantes par age")
 
         # calculate age based on reported date of birth
         # respond if calcualted age differs from reported age
@@ -462,65 +460,88 @@ class App(rapidsms.app.App):
         except Exception, e:
             self.debug("problem making assessment:")
             self.debug(e)
+            message.respond(_("invalid-measurement"), StatusCodes.APP_ERROR)
 
         ass.save()
         self.debug("saved assessment")
 
-        data = [
-                "ClusterID=%s"      % (patient.cluster_id or "??"),
-                "ChildID=%s"        % (patient.code or "??"),
-                "HouseholdID=%s"    % (patient.household_id or "??"),
-                "gender=%s"         % (patient.gender or "??"),
-                "DOB=%s"            % (patient.date_of_birth or "??"),
-                "age=%s"            % (patient.age_in_months or "??"),
-                "height=%s"         % (ass.height or "??"),
-                "weight=%s"         % (ass.weight or "??"),
-                "oedema=%s"         % (ass.oedema or "??"),
-                "MUAC=%s"           % (ass.muac or "??")]
+        try:
+            data = [
+                    u"GrappeID=%s"  % (unicode(patient.cluster_id) or u"??"),
+                    u"EnfantID=%s"  % (unicode(patient.code) or u"??"),
+                    u"MénageID=%s"  % (unicode(patient.household_id) or u"??"),
+                    u"sexe=%s"      % (unicode(patient.gender) or u"??"),
+                    u"DN=%s"        % (unicode(patient.date_of_birth) or u"??"),
+                    u"âge=%sm"      % (unicode(patient.age_in_months) or u"??"),
+                    u"poids=%skg"   % (unicode(ass.weight) or u"??"),
+                    u"taille=%scm"  % (unicode(ass.height) or u"??"),
+                    u"oedemes=%s"   % (unicode(ass.oedema) or u"??"),
+                    u"PB=%scm"      % (unicode(ass.muac) or u"??")]
 
-        confirmation = _("report-confirm") %\
-            (healthworker.full_name(), " ".join(data))
+            self.debug('constructing confirmation')
+            confirmation = _("report-confirm") %\
+                (healthworker.full_name(), u" ".join(data))
+            self.debug('confirmation constructed')
+        except Exception, e:
+            self.debug('problem constructing confirmation')
+            self.debug(e)
 
+        try:
+            # perform analysis based on cg instance from start()
+            # TODO add to Assessment save method?
+            results = ass.analyze(self.cg)
+            self.debug(results)
+            #response_map = {
+            #    'weight4age'    : 'Oops. I think weight or age is incorrect',
+            #    'height4age'    : 'Oops. I think height or age is incorrect',
+            #    'weight4height' : 'Oops. I think weight or height is incorrect'
+            #}
+            average_zscores = survey.update_avg_zscores()
+            self.debug(average_zscores)
+            context = decimal.getcontext()
+            for ind, z in results.iteritems():
+                self.debug(str(ind) + " " + str(z))
+                if z is not None:
+                    survey_avg = average_zscores[ind]
+                    # TODO plus or minus!
+                    survey_avg_limit = context.add(D(3), abs(survey_avg))
+                    if survey_avg is None:
+                        survey_avg_limit = D(3)
+                    if abs(z) > survey_avg_limit:
+                        self.debug('BIG Z: ' + ind)
+                        self.debug('sample z: ' + str(z))
+                        self.debug('avg z: ' + str(survey_avg_limit))
+                        #message.respond(response_map[ind], StatusCodes.APP_ERROR)
+                        message.respond(_("invalid-measurement"), StatusCodes.APP_ERROR)
+                        # add one to healthworker's error tally
+                        healthworker.errors = healthworker.errors + 1
+                        healthworker.save()
+                        # mark both the entry and the assessment as 'suspect'
+                        survey_entry.flag = 'S'
+                        survey_entry.save()
+                        ass.status = 'S'
+                        ass.save()
+        except Exception, e:
+            self.debug('problem with analysis:')
+            self.debug(e)
+
+        # send confirmation AFTER any error messages
         message.respond(confirmation)
         self.debug('sent confirmation')
-
-        # perform analysis based on cg instance from start()
-        # TODO add to Assessment save method?
-        results = ass.analyze(self.cg)
-        self.debug(results)
-        #response_map = {
-        #    'weight4age'    : 'Oops. I think weight or age is incorrect',
-        #    'height4age'    : 'Oops. I think height or age is incorrect',
-        #    'weight4height' : 'Oops. I think weight or height is incorrect'
-        #}
-        for ind, z in results.iteritems():
-            self.debug(str(ind) + " " + str(z))
-            if z is not None:
-                if abs(z) > 3:
-                    #message.respond(response_map[ind], StatusCodes.APP_ERROR)
-                    message.respond(_("invalid-measurement"), StatusCodes.APP_ERROR)
-                    # add one to healthworker's error tally
-                    healthworker.errors = healthworker.errors + 1
-                    healthworker.save()
-                    # mark both the entry and the assessment as 'suspect'
-                    survey_entry.flag = 'S'
-                    survey_entry.save()
-                    ass.status = 'S'
-                    ass.save()
 
     def unmatched(self, message):
         message.respond(_("invalid-message"), StatusCodes.APP_ERROR)
 
     kw.prefix = ['cancel', 'can']
     @kw("(\d+?) (\d+?) (\d+?)")
-    def cancel_report(self, message, child, household, cluster):
+    def cancel_report(self, message, cluster, child, household):
         try:
             patient = Patient.objects.get(cluster_id=cluster,\
                         household_id=household, code=child)
             ass = patient.latest_assessment()
             if ass is not None:
                 ass.cancel()
-                message.respond(_("cancel-confirm") % (ass.healthworker.full_name(), ass.healthworker.interviewer_id, ass.date, patient.code, patient.household_id, patient.cluster_id))
+                message.respond(_("cancel-confirm") % (ass.healthworker.full_name(), ass.healthworker.interviewer_id, ass.date, patient.cluster_id, patient.code, patient.household_id))
             else:
                 message.respond(_("cancel-error") % (child, household, cluster))
         except ObjectDoesNotExist:
@@ -532,27 +553,27 @@ class App(rapidsms.app.App):
     def register_healthworker(self, message, code, name):
         self.debug("register...")
         try:
-            healthworker, created = self.__get_or_create_healthworker(message, code, name)
+            healthworker, created = self.__register_healthworker(message, code, name)
             if created:
                 message.respond(_("register-confirm") % (healthworker.full_name(), healthworker.interviewer_id))
             else:
                 message.respond(_("register-again") % (healthworker.full_name()))
-                #message.respond("To register a different interviewer for this ID, please first text REMOVE followed by the interviewer ID.")
         except Exception, e:
             self.debug("oops! problem registering heathworker:")
             self.debug(e)
+            message.respond(_("invalid-message"), StatusCodes.APP_ERROR)
             pass
 
     @kw("remove (\d+?)")
     def remove_healthworker(self, message, code):
         self.debug("removing...")
-        healthworker, created = self.__get_or_create_healthworker(message, code)
         try:
-            if not created:
-                healthworker.status = 'I'
-                healthworker.save()
-                message.respond(_("remove-confirm") % (healthworker.full_name(), healthworker.interviewer_id))
-                healthworker.interviewer_id = None 
-                healthworker.save()
+            healthworker = HealthWorker.objects.get(interviewer_id=code)
+            healthworker.status = 'I'
+            healthworker.save()
+            message.respond(_("remove-confirm") % (healthworker.full_name(), healthworker.interviewer_id))
+            healthworker.interviewer_id = None 
+            healthworker.save()
         except Exception, e:
+            message.respond(_("invalid-message"), StatusCodes.APP_ERROR)
             self.debug(e)
