@@ -1,19 +1,21 @@
 #!/usr/bin/env pytho]
 # vim: ai ts=4 sts=4 et sw=4
 
+from datetime import datetime, date, timedelta
+from decimal import Decimal as D
+
 from django.db import models
+from django.db.models.aggregates import Avg
 from django.contrib.auth import models as auth_models
 from django.core.exceptions import ObjectDoesNotExist 
-from datetime import datetime, date, timedelta
 
 from logger.models import IncomingMessage
 #from locations.models import Location  
 from reporters.models import Reporter, PersistantConnection
 from people.models import Person
-
-from healthtables.models import StuntingTable, WastingTable
-
 from childhealth.utils import *
+
+#from healthtables.models import StuntingTable, WastingTable
 #from messages import *
    
 class HealthWorker(Reporter):
@@ -23,7 +25,6 @@ class HealthWorker(Reporter):
     )
     last_updated           = models.DateTimeField(auto_now=True)
     errors                 = models.IntegerField(max_length=5,default=0) 
-    message_count          = models.IntegerField(max_length=5,default=0)  # I am going to log this explicitly - not through the Logger
     status                 = models.CharField(max_length=1,choices=HW_STATUS_CHOICES,default='A')
     interviewer_id          = models.PositiveIntegerField(max_length=10, blank=True, null=True)
 
@@ -105,6 +106,7 @@ class Assessment(models.Model):
     # who what where when why
     healthworker        = models.ForeignKey(HealthWorker,null=True)
     patient             = models.ForeignKey(Patient)
+    survey              = models.ForeignKey('Survey')
     date                = models.DateTimeField(auto_now_add=True)
     status              = models.CharField(max_length=1,choices=ASS_STATUS_CHOICES,default='G')
 
@@ -113,12 +115,12 @@ class Assessment(models.Model):
     weight              = models.DecimalField(max_digits=4,decimal_places=1,blank=True,null=True)
     muac                = models.DecimalField(max_digits=6,decimal_places=2,blank=True,null=True)
     oedema              = models.BooleanField(default=False)
-    diarrea             = models.BooleanField(default=False)
+    #diarrea             = models.BooleanField(default=False)
 
     # expensive calculations 
-    mam                 = models.BooleanField(default=False)
-    sam                 = models.BooleanField(default=False)
-    stunting            = models.BooleanField(default=False)
+    #mam                 = models.BooleanField(default=False)
+    #sam                 = models.BooleanField(default=False)
+    #stunting            = models.BooleanField(default=False)
 
     # z-scores
     weight4age          = models.DecimalField(max_digits=4,decimal_places=2,null=True,blank=True)
@@ -177,7 +179,7 @@ class Assessment(models.Model):
         self.save()
 
     #not pretty
-    def nutritional_status(self):
+#    def nutritional_status(self):
         #stunts = StuntingTable.objects.all()
         #for stunt in stunts:
             # convert to int to get floor, then to string
@@ -185,32 +187,32 @@ class Assessment(models.Model):
         #    new_age = str(float(int(stunt.age)))
         #    stunt.age = new_age
         #    stunt.save()
-        try: 
-            s_calc = StuntingTable.objects.get(gender=self.patient.gender,age=self.patient.age_in_months)
-            self.stunting = self.height < s_calc.height
+#        try: 
+#            s_calc = StuntingTable.objects.get(gender=self.patient.gender,age=self.patient.age_in_months)
+#            self.stunting = self.height < s_calc.height
             #print "STUNTING: " + str(self.stunting)
-            malnurished = WastingTable.objects.get(height=self.height)
-            self.sam = self.weight <= malnurished.weight_70 
+#            malnurished = WastingTable.objects.get(height=self.height)
+#            self.sam = self.weight <= malnurished.weight_70 
             #print "SAM: " + str(self.sam)
-            self.mam = (self.weight <= malnurished.weight_80) and (not self.sam)
+#            self.mam = (self.weight <= malnurished.weight_80) and (not self.sam)
             #print "MAM: " + str(self.mam)
             #print "STATUS: " + self.patient.status_from_bools(self.mam,self.sam, self.stunting)
-            self.patient.status = self.patient.status_from_bools(self.mam,self.sam, self.stunting)
-        except Exception, e:
-            print e
-            return False
+#            self.patient.status = self.patient.status_from_bools(self.mam,self.sam, self.stunting)
+#        except Exception, e:
+#            print e
+#            return False
 
-    def get_stunting(self):
-        stunt_from_table = stunting(self.date_of_birth, self.gender)
-        if stunt_from_table:
-            self.stunting = float(stunt_from_table) > float(self.height)
+#    def get_stunting(self):
+#        stunt_from_table = stunting(self.date_of_birth, self.gender)
+#        if stunt_from_table:
+#            self.stunting = float(stunt_from_table) > float(self.height)
 
-    def verify(self): 
-        resp = {}
+#    def verify(self): 
+#        resp = {}
         #if self.patient.assessments.count() > 0:
         #    last_assessment = self.patient.assessments[0]
         #    if last_assessment.height > self.height: return {"ERROR":"last height is %s and this height is %s" % (last_assessment.height,self.height)}
-        return resp
+#        return resp
         
     def cancel(self):
         self.status = 'C'
@@ -232,7 +234,7 @@ class SurveyEntry(models.Model):
     cluster_id          = models.CharField(max_length=25,blank=True,null=True)
     child_id            = models.CharField(max_length=25,blank=True,null=True)
     household_id        = models.CharField(max_length=25,blank=True,null=True)
-    sex                 = models.CharField(max_length=25,blank=True,null=True)
+    gender              = models.CharField(max_length=25,blank=True,null=True)
     date_of_birth       = models.CharField(max_length=25,blank=True,null=True)
     age_in_months       = models.CharField(max_length=25,blank=True,null=True)
 
@@ -256,8 +258,42 @@ class Survey(models.Model):
     avg_height4age          = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
     avg_weight4height       = models.DecimalField(max_digits=8,decimal_places=2,blank=True,null=True)
 
+    def __unicode__(self):
+        return "%s (%s to %s)" % (self.location, self.begin_date, self.end_date)
+
     def update_avg_zscores(self):
-        survey_assessments = Assessment.objects.filter(date__gte=self.begin_date, date__lte=self.end_date)
-        self.avg_weigh4age = survey_assessments.aggregate(avg_w4a=Avg('weight4age'))["avg_w4a"]
-        self.avg_height4age = survey_assessments.aggregate(avg_h4a=Avg('height4age'))["avg_h4a"]
-        self.avg_weight4height = survey_assessments.aggregate(avg_w4h=Avg('weight4height'))["avg_w4h"]
+        context = decimal.getcontext()
+        survey_assessments = self.assessment_set.all()
+        sample_avg_weigh4age = survey_assessments.aggregate(avg_w4a=Avg('weight4age'))["avg_w4a"]
+        sample_avg_height4age = survey_assessments.aggregate(avg_h4a=Avg('height4age'))["avg_h4a"]
+        sample_avg_weight4height = survey_assessments.aggregate(avg_w4h=Avg('weight4height'))["avg_w4h"]
+
+        # calculate survey's avg_weight4height, avg_height4age, and avg_weight4age
+        # these averages are seeded with a baseline z-score given the
+        # weight of 30 entries
+        if self.baseline_weight4age is not None: 
+            # (baseline z-score * 30) + avg z-score of survey's assessments
+            weighted_avg_weight4age_numerator = context.add(context.multiply(\
+                self.baseline_weight4age, D(30)), sample_avg_weight4age) 
+            # 30 + number of survey's assessments that are not none
+            weighted_avg_weight4age_denomenator = context.add(D(30),\
+                survey_assessments.exclude(weight4age=None).count())
+            # divide and limit to hundreths place
+            self.avg_weight4age = context.divide(weighted_avg_weight4age_numerator,\
+                weighted_avg_weight4age_denomenator).quantize(D('.01'))
+
+        if self.baseline_height4age is not None:
+            weighted_avg_height4age_numerator = context.add(context.multiply(\
+                self.baseline_height4age, D(30)), sample_avg_height4age) 
+            weighted_avg_height4age_denomenator = context.add(D(30),\
+                survey_assessments.exclude(height4age=None).count())
+            self.avg_height4age = context.divide(weighted_avg_height4age_numerator,\
+                weighted_avg_height4age_denomenator).quantize(D('.01'))
+
+        if self.baseline_weight4height is not None:
+            weighted_avg_weight4height_numerator = context.add(context.multiply(\
+                self.baseline_weight4height, D(30)), sample_avg_weight4height) 
+            weighted_avg_weight4height_denomenator = context.add(D(30),\
+                survey_assessments.exclude(weight4height=None).count())
+            self.avg_weight4height = context.divide(weighted_avg_weight4height_numerator,\
+                weighted_avg_weight4height_denomenator).quantize(D('.01'))

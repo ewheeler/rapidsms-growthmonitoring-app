@@ -335,6 +335,12 @@ class App(rapidsms.app.App):
     def report(self, message, cluster_id, child_id, household_id, data_tokens):#, gender, bday, age, weight, height, oedema, muac):
         self.debug("reporting...")
         try:
+            survey = Survey.objects.get(begin_date__lte=datetime.datetime.now().date(),\
+                end_date__gte=datetime.datetime.now().date())
+
+        except ObjectDoesNotExist, MultipleObjectsReturned:
+            return message.respond("No active survey at this date")
+        try:
             # find out who is submitting this report
             healthworker, created = self.__get_or_create_healthworker(message)
         except Exception, e:
@@ -343,7 +349,7 @@ class App(rapidsms.app.App):
             # halt reporting process and tell sender to register first
             return message.respond(_("register-before-reporting"), StatusCodes.APP_ERROR)
 
-        token_labels = ['sex', 'date_of_birth', 'age_in_months', 'weight', 'height', 'oedema', 'muac']
+        token_labels = ['gender', 'date_of_birth', 'age_in_months', 'weight', 'height', 'oedema', 'muac']
         token_data = data_tokens.split()
         
         try:
@@ -380,8 +386,6 @@ class App(rapidsms.app.App):
                 message.respond(_("invalid-id") % (v, k), StatusCodes.APP_ERROR)
             # halt reporting process if any of the id codes are invalid
             return True
-        # TODO this is silly. move to reporters? logger? count logged messages?
-        healthworker.message_count  = healthworker.message_count+1
 
         self.debug("getting patient...")
         # begin collecting valid patient arguments
@@ -402,7 +406,7 @@ class App(rapidsms.app.App):
                 message.respond(_("invalid-dob") % (survey_entry.date_of_birth), StatusCodes.APP_ERROR)
 
         # make sure reported gender is valid
-        good_sex = self._validate_sex(survey_entry.sex)
+        good_sex = self._validate_sex(survey_entry.gender)
         if good_sex is not None:
             self.debug(good_sex)
             patient_kwargs.update({'gender' : good_sex})
@@ -410,7 +414,7 @@ class App(rapidsms.app.App):
             patient_kwargs.update({'gender' : ""}) 
             # halt reporting process if we dont have a valid gender.
             # this can't be unknown. check in their pants if you arent sure
-            return message.respond(_("invalid-gender") % (survey_entry.sex), StatusCodes.APP_ERROR)
+            return message.respond(_("invalid-gender") % (survey_entry.gender), StatusCodes.APP_ERROR)
 
         # find patient or create a new one
         self.debug(patient_kwargs)
@@ -451,7 +455,8 @@ class App(rapidsms.app.App):
 
             if valid_height and valid_weight and valid_muac:
                 ass = Assessment(healthworker=healthworker, patient=patient,\
-                        height=survey_entry.height, weight=survey_entry.weight, muac=survey_entry.muac, oedema=valid_oedema)
+                        height=survey_entry.height, weight=survey_entry.weight,\
+                        muac=survey_entry.muac, oedema=valid_oedema, survey=survey)
             else:
                 return message.respond(_("invalid-measurement"))
         except Exception, e:
