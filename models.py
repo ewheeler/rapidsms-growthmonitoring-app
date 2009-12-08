@@ -142,7 +142,14 @@ class Assessment(models.Model):
 
     def __unicode__(self):
         return "%s" % self.id
-     
+    
+    @property
+    def human_oedema(self):
+        if self.oedema == True:
+            return 'Y'
+        else:
+            return 'N'
+
     def analyze(self, childgrowth):
         results = {}
         #self.nutritional_status()

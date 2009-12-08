@@ -144,19 +144,20 @@ class App(rapidsms.app.App):
             return None
 
     def __register_healthworker(self, msg, interviewer_id, name, lang='fr'):
+        self.debug('registering healthworker...')
         try:
             # find healthworker via interviewer_id and add new connection
             # (e.g., registering from a second connection)
             alias, first, last = Reporter.parse_name(name)
             healthworker = HealthWorker.objects.get(interviewer_id=interviewer_id,\
                 first_name=first, last_name=last)
-            per_con = msg.persistance_dict['connection']
+            per_con = msg.persistant_connection
             per_con.reporter = healthworker
             per_con.save()
             return healthworker, False
         except ObjectDoesNotExist, MultipleObjectsReturned:
             try:
-                # TODO remove conneciton from previous hw
+                # TODO remove connection from previous hw
                 # parse the name, and create a healthworker/reporter
                 # (e.g., registering from first connection)
                 alias, first, last = Reporter.parse_name(name)
@@ -250,6 +251,7 @@ class App(rapidsms.app.App):
         except Exception, e:
             self.debug('problem validating date:')
             self.debug(e)
+            return None, None
 
     def _validate_sex(self, potential_sex):
         self.debug("validate sex...")
@@ -270,13 +272,13 @@ class App(rapidsms.app.App):
         try:
             if potential_bool is not None:
                 if potential_bool[0].upper() in ["Y", "YES", "O", "OUI"]:
-                    return "Y"
+                    return "Y", 1
                 elif potential_bool[0].upper() in ["N", "NO", "NON"]:
-                    return "N"
+                    return "N", 0
                 else:
                     return None
             else:
-                return None
+                return None, 0
         except Exception, e:
             self.debug('problem validating bool:')
             self.debug(e)
@@ -461,7 +463,7 @@ class App(rapidsms.app.App):
                 if v.upper().startswith('X'):
                     tokens.update({k : None})
 
-            valid_oedema = self._validate_bool(survey_entry.oedema)
+            human_oedema, bool_oedema = self._validate_bool(survey_entry.oedema)
             valid_height, valid_weight, valid_muac = self._validate_measurements(\
                 measurements['height'], measurements['weight'], measurements['muac'])
 
@@ -472,7 +474,7 @@ class App(rapidsms.app.App):
             if valid_height and valid_weight and valid_muac:
                 ass = Assessment(healthworker=healthworker, patient=patient,\
                         height=measurements['height'], weight=measurements['weight'],\
-                        muac=measurements['muac'], oedema=valid_oedema, survey=survey)
+                        muac=measurements['muac'], oedema=bool_oedema, survey=survey)
             else:
                 return message.respond(_("invalid-measurement") %\
                     (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id),\
@@ -499,7 +501,7 @@ class App(rapidsms.app.App):
                     "age=%sm"      % (patient.age_in_months or "??"),
                     "poids=%skg"   % (ass.weight or "??"),
                     "taille=%scm"  % (ass.height or "??"),
-                    "oedemes=%s"   % (ass.oedema or "??"),
+                    "oedemes=%s"   % (ass.human_oedema or "??"),
                     "PB=%scm"      % (ass.muac or "??")]
 
             self.debug('constructing confirmation')
@@ -585,7 +587,7 @@ class App(rapidsms.app.App):
             else:
                 message.respond(_("register-again") % (healthworker.full_name()))
         except Exception, e:
-            self.debug("oops! problem registering heathworker:")
+            self.debug("oops! problem registering healthworker:")
             self.debug(e)
             message.respond(_("invalid-message"), StatusCodes.APP_ERROR)
             pass

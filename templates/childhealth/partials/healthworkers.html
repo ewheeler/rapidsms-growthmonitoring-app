@@ -6,10 +6,8 @@
 	<table class="export">
 		<thead><tr>
 				<th>First</th>
-				<th>Last</th>
 				<th>ID</th>
-				<th>Team</th>
-				<th>Last message</th>
+				<th colspan="2">Last message</th>
 				<th>Total messages</th>
 				<th>Messages this month</th>
 				<th>Messages this week</th>
@@ -23,10 +21,8 @@
 	            {% for hw in healthworkers %}
                     <tr>
                             <td>{{ hw.first_name }}</td>
-                            <td>{{ hw.last_name }}</td>
                             <td>{{ hw.interviewer_id }}</td>
-                            <td>{% for g in hw.groups %}{{ g }} {% endfor %}</td>
-                            <td>{{ hw.last_seen|last_seen }}</td>
+                            <td colspan="2">{{ hw.last_seen|last_seen }}</td>
                             <td>{{ hw.num_message_count }}</td>
                             <td>{{ hw.num_message_month }}</td>
                             <td>{{ hw.num_message_week }}</td>

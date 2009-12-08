@@ -15,7 +15,7 @@ from childhealth.models import *
 def childhealth_stats():
     return { "stats": [
         {
-            "caption": "Interviewers",
+            "caption": "Teams",
             "value":   HealthWorker.objects.count()
         },
         {
@@ -39,8 +39,19 @@ def childhealth_stats():
 @register.inclusion_tag("childhealth/partials/progress.html")
 @dashboard("top_middle", "childhealth/partials/progress.html", "childhealth.can_view")
 def childhealth_progress():
-    start = datetime.datetime(2009, 11, 20)
-    end = datetime.datetime(2009, 12, 20)
+    def unique_list(seq):
+        set = {}
+        map(set.__setitem__, seq, [])
+        return set.keys()
+    try:
+        survey = Survey.objects.get(begin_date__lte=datetime.datetime.now().date(),\
+            end_date__gte=datetime.datetime.now().date())
+
+    except ObjectDoesNotExist, MultipleObjectsReturned:
+        survey = Survey.objects.filter(end_date__lte=datetime.datetime.now()\
+                    .date()).order_by('begin_date')[0]
+    start = survey.begin_date
+    end = survey.end_date
     days = []
     for d in range(0, (end - start).days):
         date = start + datetime.timedelta(d)
@@ -54,14 +65,19 @@ def childhealth_progress():
         data = {
             "number": d+1,
             "date": date,
-            "in_future": date > datetime.datetime.now()
+            "in_future": date > datetime.datetime.now().date()
         }
         
         if not data["in_future"]:
+            healthworkers_today = SurveyEntry.objects.filter(survey_date__year=date.\
+                    year, survey_date__month=date.month, survey_date__day=\
+                    date.day).values_list('healthworker_id', flat=True)
+            unique_healthworkers_today = unique_list(healthworkers_today)
             data.update({
                 "children": Patient.objects.filter(created_at__year=date.year,\
                     created_at__month=date.month, created_at__day=date.day\
                     ).count(),
+                "healthworkers": len(unique_healthworkers_today),
                 "surveys": SurveyEntry.objects.filter(survey_date__year=date.\
                     year, survey_date__month=date.month, survey_date__day=\
                     date.day).count(),
@@ -73,14 +89,17 @@ def childhealth_progress():
             })
         
             data.update({
-                "valid_perc":    int((data["valids"]    / data["surveys"])    * 100) if (data["valids"]    > 0) else 0,
-                "good_perc":    int((data["goods"]    / data["valids"])    * 100) if (data["goods"]    > 0) else 0,
-                "suspect_perc":    int((data["suspects"]    / data["valids"])    * 100) if (data["suspects"]    > 0) else 0,
+                "valid_perc":    int((float(data["valids"])    / float(data["surveys"]))    * 100.0) if (data["valids"]    > 0) else 0,
+                "good_perc":    int((float(data["goods"])    / float(data["surveys"]))    * 100.0) if (data["goods"]    > 0) else 0,
+                "suspect_perc":    int((float(data["suspects"])    / float(data["surveys"]))    * 100.0) if (data["suspects"]    > 0) else 0,
             })
         days.append(data)
+    active_healthworkers = unique_list(SurveyEntry.objects.all().values_list(\
+        'healthworker_id', flat=True))
     return {
         "days" : days,
         "total_children" : Patient.objects.all().count(),
+        "active_healthworkers" : len(active_healthworkers),
         "total_surveys": SurveyEntry.objects.all().count(),
         "total_valids": Assessment.objects.all().count(),
         "total_goods": Assessment.objects.all().filter(status='G').count(),
@@ -97,7 +116,6 @@ def childhealth_healthworkers():
             "first_name" : hw.first_name,
             "last_name" : hw.last_name,
             "interviewer_id" : hw.interviewer_id,
-            "groups" : [g.title for g in hw.groups.flatten()],
             "last_seen" : hw.last_seen(),
             "num_message_count" : hw.num_messages_sent(),
             "num_message_month" : hw.num_messages_sent("month"),
@@ -113,4 +131,5 @@ def childhealth_healthworkers():
         }
         healthworkers_infos.append(info)
 
+    healthworkers_infos.sort(lambda x, y: cmp(y['surveys_today'], x['surveys_today']))
     return { "healthworkers" : healthworkers_infos }
