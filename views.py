@@ -1,9 +1,10 @@
 #!/usr/bin/env python
-# vim: ai ts=4 sts=4 et sw=4
+# vim: ai ts=4 sts=4 et sw=4 encoding=utf-8
 
 from datetime import *
 import os,sys,string
 import time as t
+import csv
 
 
 from django.core.servers.basehttp import FileWrapper
@@ -21,7 +22,7 @@ from django.db.models import Avg,Max,Min,Count
 from rapidsms.webui.utils import render_to_response, paginated
 from displaymanager.utils import *
 from export.utils import excel#,download
-from childhealth.models import *  #no hard code
+from childhealth.models import *
 from pilot.models import *
 from locations.models import *
 from reporters.models import *
@@ -86,10 +87,29 @@ def ass_dicts_for_display():
         dicts_for_display.append(ass_dict)
     return dicts_for_display
 
-def csv_assessments(req, format='csv'):
-    context = {}
-    # TODO need to export IDs in their own fields!
-    return export(Assessment.objects.all().select_related())
+def csv_assessments(req):
+    # Create the HttpResponse object with the appropriate CSV header.
+    response = HttpResponse(mimetype='text/csv')
+    response['Content-Disposition'] = 'attachment; filename=assessments.csv'
+
+    assessments = ass_dicts_for_display()
+    # sort by date, descending
+    assessments.sort(lambda x, y: cmp(y['date'], x['date']))
+
+    writer = csv.writer(response)
+    # column labels
+    writer.writerow(['date', 'interviewer ID', 'cluster ID', 'child ID',\
+        'household ID', 'sex', 'date of birth', 'age in months', 'height',\
+        'weight', 'oedema', 'muac', 'height for age', 'weight for age',\
+        'weight for height', 'survey status'])
+    for ass in assessments:
+        writer.writerow([ass['date'], ass['interviewer_id'], ass['cluster_id'],\
+            ass['child_id'], ass['household_id'], ass['sex'], ass['date_of_birth'],\
+            ass['age_in_months'], ass['height'], ass['weight'], ass['oedema'],\
+            ass['muac'], ass['height4age'], ass['weight4age'], ass['weight4height'],\
+            ass['human_status']])
+
+    return response
 
 def csv_entries(req, format='csv'):
     context = {}
@@ -97,10 +117,10 @@ def csv_entries(req, format='csv'):
         return export(SurveyEntry.objects.all())
     return export(SurveyEntry.objects.all(), ['Survey Date','Interviewer ID','Cluster ID','Child ID','Household ID', 'Sex', 'Date of Birth', 'Age', 'Height', 'Weight', 'Oedema', 'MUAC'])
 
+# TODO can't get any of meredith's view code (below) to work
 def to_js_date(dt):
     return 1000 * t.mktime(dt.timetuple())
     
-# TODO can't get any of meredith's view code (below) to work
 #THIS IS HARD CODED BECAUSE DJANGO AGGREGATION SUCKS BALLS
 def stats(filter_params,hd,header,descendants):
     filter_params["health_worker__person__location__in"] = [i.id for i in descendants]

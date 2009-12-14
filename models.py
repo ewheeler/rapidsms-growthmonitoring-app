@@ -187,6 +187,7 @@ class Assessment(models.Model):
                 pass
         self.save()
 
+    #TODO refactor malawi analysis
     #not pretty
 #    def nutritional_status(self):
         #stunts = StuntingTable.objects.all()
