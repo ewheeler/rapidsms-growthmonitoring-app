@@ -103,11 +103,17 @@ def csv_assessments(req):
         'weight', 'oedema', 'muac', 'height for age', 'weight for age',\
         'weight for height', 'survey status'])
     for ass in assessments:
-        writer.writerow([ass['date'], ass['interviewer_id'], ass['cluster_id'],\
-            ass['child_id'], ass['household_id'], ass['sex'], ass['date_of_birth'],\
-            ass['age_in_months'], ass['height'], ass['weight'], ass['oedema'],\
-            ass['muac'], ass['height4age'], ass['weight4age'], ass['weight4height'],\
-            ass['human_status']])
+        row = []
+        keys = ['date', 'interviewer_id', 'cluster_id', 'child_id',\
+            'household_id', 'sex', 'date_of_birth', 'age_in_months',\
+            'height', 'weight', 'oedema', 'muac', 'height4age', 'weight4age',\
+            'weight4height', 'human_status']
+        for key in keys:
+            if ass.has_key(key):
+                row.append(ass[key])
+            else:
+                row.append("None")
+        writer.writerow(row)
 
     return response
 
