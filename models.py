@@ -68,7 +68,10 @@ class Patient(Person):
         return Assessment.objects.filter(patient=self.patient).order_by('-patient__last_updated')
 
     def latest_assessment(self):
-        return assessments[0]
+        if len(self.assessments) > 0:
+            return self.assessments[0]
+        else:
+            return None
 
     @property
     def age_in_months_from_date_of_birth(self):

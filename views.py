@@ -87,12 +87,40 @@ def ass_dicts_for_display():
         dicts_for_display.append(ass_dict)
     return dicts_for_display
 
+# TODO DRY
+def ass_dicts_for_export():
+    dicts_for_export = []
+    #asses = Assessment.objects.all().select_related()
+    patients = Patient.objects.all()
+    asses = []
+    for patient in patients:
+        if patient.latest_assessment() is not None:
+            asses.append(patient.latest_assessment())
+
+    for ass in asses:
+        ass_dict = {}
+        # add desired fields from related models (we want to display the
+        # IDs, ect from foreign fields rather than just the unicode() names
+        # or all of the fields from related models)
+        # TODO is there a better way to do this? adding fields to the queryset???
+        ass_dict.update({'interviewer_id'   : ass.healthworker.interviewer_id})
+        ass_dict.update({'child_id'         : ass.patient.code})
+        ass_dict.update({'household_id'     : ass.patient.household_id})
+        ass_dict.update({'cluster_id'       : ass.patient.cluster_id})
+        ass_dict.update({'sex'              : ass.patient.gender})
+        ass_dict.update({'date_of_birth'    : ass.patient.date_of_birth})
+        ass_dict.update({'age_in_months'    : ass.patient.age_in_months})
+        ass_dict.update({'human_status'     : ass.get_status_display()})
+        ass_dict.update(**instance_to_dict(ass))
+        dicts_for_export.append(ass_dict)
+    return dicts_for_export
+
 def csv_assessments(req):
     # Create the HttpResponse object with the appropriate CSV header.
     response = HttpResponse(mimetype='text/csv')
     response['Content-Disposition'] = 'attachment; filename=assessments.csv'
 
-    assessments = ass_dicts_for_display()
+    assessments = ass_dicts_for_export()
     # sort by date, descending
     assessments.sort(lambda x, y: cmp(y['date'], x['date']))
 
