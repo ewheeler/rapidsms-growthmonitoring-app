@@ -2,6 +2,7 @@
 # vim: ai ts=4 sts=4 et sw=4 encoding=utf-8
 
 from datetime import datetime, date, timedelta
+import decimal
 from decimal import Decimal as D
 
 from django.db import models
@@ -13,7 +14,8 @@ from logger.models import IncomingMessage
 #from locations.models import Location  
 from reporters.models import Reporter, PersistantConnection
 from people.models import Person
-from childhealth.utils import *
+
+from pygrowup.pygrowup import helpers
 
 #from healthtables.models import StuntingTable, WastingTable
 #from messages import *
@@ -75,7 +77,8 @@ class Patient(Person):
 
     @property
     def age_in_months_from_date_of_birth(self):
-        return util.sloppy_date_to_age_in_months(self.date_of_birth)
+        if self.date_of_birth is not None:
+            return helpers.date_to_age_in_months(self.date_of_birth)
 
     def __unicode__(self):
         return "Child %s, Household %s, Cluster %s" % (self.code, self.household_id, self.cluster_id)
