@@ -2,12 +2,15 @@
 # vim: ai ts=4 sts=4 et sw=4 encoding=utf-8
 
 from datetime import date, datetime
+import decimal
 from decimal import Decimal as D
 import time
 import gettext
 
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.db.models import F
+
+from pygrowup.pygrowup import *
 
 import rapidsms
 from rapidsms.message import Message
@@ -17,7 +20,6 @@ from rapidsms.parsers.keyworder import *
 
 from logger.models import *
 from people.models import PersonType
-from childhealth.utils import *
 from childhealth.models import *
 from childhealth.messages import *
 #
@@ -243,7 +245,7 @@ class App(rapidsms.app.App):
             #if matches is not None:
             #    date = matches.group(0)
             self.debug(potential_date)
-            good_date_str, good_date_obj = util.get_good_date(potential_date)
+            good_date_str, good_date_obj = helpers.get_good_date(potential_date)
             self.debug(good_date_str)
             return good_date_str, good_date_obj 
             #else:
@@ -257,7 +259,7 @@ class App(rapidsms.app.App):
         self.debug("validate sex...")
         self.debug(potential_sex)
         try:
-            gender = util.get_good_sex(potential_sex)
+            gender = helpers.get_good_sex(potential_sex)
             if gender is not None:
                 return gender
             else:
@@ -330,8 +332,8 @@ class App(rapidsms.app.App):
     def report(self, message, cluster_id, child_id, household_id, data_tokens):#, gender, bday, age, weight, height, oedema, muac):
         self.debug("reporting...")
         try:
-            survey = Survey.objects.get(begin_date__lte=datetime.datetime.now().date(),\
-                end_date__gte=datetime.datetime.now().date())
+            survey = Survey.objects.get(begin_date__lte=datetime.now().date(),\
+                end_date__gte=datetime.now().date())
 
         except ObjectDoesNotExist, MultipleObjectsReturned:
             return message.respond("No active survey at this date")
@@ -432,7 +434,7 @@ class App(rapidsms.app.App):
             if survey_entry.age_in_months is not None:
                 patient.age_in_months = int(survey_entry.age_in_months)
             else:
-                patient.age_in_months = util.sloppy_date_to_age_in_months(patient.date_of_birth)
+                patient.age_in_months = helpers.date_to_age_in_months(patient.date_of_birth)
             self.debug(patient.age_in_months)
             patient.save()
         except Exception, e:
@@ -444,7 +446,7 @@ class App(rapidsms.app.App):
         # respond if calcualted age differs from reported age
         # by more than 3 months TODO make this configurable
         #self.debug("getting sloppy age...")
-        #sloppy_age_in_months = util.sloppy_date_to_age_in_months(patient.date_of_birth)
+        #sloppy_age_in_months = helpers.date_to_age_in_months(patient.date_of_birth)
         #self.debug(sloppy_age_in_months)
         #if (abs(int(sloppy_age_in_months) - int(patient.age_in_months)) > 3):
         #    message.respond("Date of birth indicates Child ID %s's age (in months) is %s, which does not match the reported age (in months) of %s" % (patient.code, sloppy_age_in_months, patient.age_in_months))
@@ -516,12 +518,14 @@ class App(rapidsms.app.App):
             # perform analysis based on cg instance from start()
             # TODO add to Assessment save method?
             results = ass.analyze(self.cg)
+            self.debug('analyzed!')
             self.debug(results)
             #response_map = {
             #    'weight4age'    : 'Oops. I think weight or age is incorrect',
             #    'height4age'    : 'Oops. I think height or age is incorrect',
             #    'weight4height' : 'Oops. I think weight or height is incorrect'
             #}
+            self.debug('updating averages...')
             average_zscores = survey.update_avg_zscores()
             self.debug(average_zscores)
             context = decimal.getcontext()
