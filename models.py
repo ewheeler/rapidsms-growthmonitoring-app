@@ -9,93 +9,10 @@ from django.db import models
 from django.db.models.aggregates import Avg
 from django.core.exceptions import ObjectDoesNotExist 
 
-from reporters.models import Reporter, PersistantConnection
-from people.models import Person
-
 from pygrowup.pygrowup import helpers
 
-class HealthWorker(Reporter):
-    HW_STATUS_CHOICES = (
-        ('A', 'Active'),
-        ('I', 'Inactive'),
-    )
-    last_updated           = models.DateTimeField(auto_now=True)
-    # counter for measurement errors, not poor texting skills
-    # incremented only when z-scores indicate unreasonable measurements
-    errors                 = models.IntegerField(max_length=5,default=0) 
-    status                 = models.CharField(max_length=1,choices=HW_STATUS_CHOICES,default='A')
-    interviewer_id          = models.PositiveIntegerField(max_length=10, blank=True, null=True)
-
-    class Meta:
-        verbose_name = "Health Worker"
-
-    def __unicode__(self):
-        return "%s" % (self.full_name())
-
-    def num_messages_sent(self, when=None):
-        time_chunks = {
-                'today' : datetime.datetime.now().date(),
-                'week' : (datetime.datetime.now()-timedelta(weeks=1)),
-                'month' : (datetime.datetime.now()-timedelta(days=30)),
-                'year' : (datetime.datetime.now()-timedelta(days=365))}
-        if when in time_chunks.keys():
-                return self.incoming_messages.filter(\
-                            received__gte=time_chunks[when]).count()
-        else:
-            return self.incoming_messages.all().count()
-
-class Patient(Person):
-    PATIENT_STATUS = (
-		 ("NA","NA"),
-		 ("NAM",""),
-                 ("MAM","Moderate Malnutrition"),
-                 ("SAM","Severe Malnutrition"),
-                 ("W","Wasting"),
-                 ("S","Stunting"),)
-
-    status          = models.CharField(max_length=1000,choices=PATIENT_STATUS,default="",blank=True)
-    last_updated    = models.DateTimeField(auto_now=True)
-    household_id    = models.PositiveIntegerField(max_length=10, blank=True, null=True)
-    cluster_id      = models.PositiveIntegerField(max_length=10, blank=True, null=True)
-    age_in_months   = models.PositiveIntegerField(max_length=10, blank=True, null=True)
-
-    @property
-    def assessments(self):
-        return Assessment.objects.filter(patient=self.patient).order_by('-patient__last_updated')
-
-    def latest_assessment(self):
-        if len(self.assessments) > 0:
-            return self.assessments[0]
-        else:
-            return None
-
-    @property
-    def age_in_months_from_date_of_birth(self):
-        if self.date_of_birth is not None:
-            return helpers.date_to_age_in_months(self.date_of_birth)
-
-    def __unicode__(self):
-        return "Child %s, Household %s, Cluster %s" % (self.code, self.household_id, self.cluster_id)
-
-    def status_from_bools(self, mam, sam, stunting):
-        if not mam and not sam and not stunting:
-            return "NAM"
-        #(False,True):"SAM"
-        elif sam and not mam:
-            return "SAM"
-        #(False,False):"NAM"
-        elif mam and not sam:
-            return "MAM"
-        elif stunting:
-            return "S"
-        #(True,False):"MAM"
-        elif not mam and not sam:
-            return "NAM"
-        else:
-            return "NA"
-
-    class Meta:
-        verbose_name = "Patient"
+from rapidsms.models import Contact
+from person.models import Person
 
 class Assessment(models.Model): 
     ASS_STATUS_CHOICES = (
@@ -106,8 +23,8 @@ class Assessment(models.Model):
     )
 
     # who what where when why
-    healthworker        = models.ForeignKey(HealthWorker,null=True)
-    patient             = models.ForeignKey(Patient)
+    healthworker        = models.ForeignKey(Contact,null=True)
+    patient             = models.ForeignKey(Person)
     survey              = models.ForeignKey('Survey')
     date                = models.DateTimeField(auto_now_add=True)
     status              = models.CharField(max_length=1,choices=ASS_STATUS_CHOICES,default='G')
