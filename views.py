@@ -3,37 +3,19 @@
 
 from datetime import *
 import os,sys,string
-import time as t
 import csv
 
-
-from django.core.servers.basehttp import FileWrapper
-from django.utils.datastructures import MergeDict 
-from django.views.decorators.http import require_GET, require_POST
-from django.shortcuts import render_to_response, get_object_or_404
-from django.http import HttpResponse, HttpResponseRedirect, HttpResponseServerError
-from django.db import IntegrityError
-from django.template import RequestContext
-from django import forms
-from django.core.urlresolvers import reverse
-from django.db.models import Avg,Max,Min,Count
-
+from django.http import HttpResponse
 
 from rapidsms.webui.utils import render_to_response, paginated
-from displaymanager.utils import *
-from export.utils import excel#,download
-from childhealth.models import *
-from pilot.models import *
 from locations.models import *
 from reporters.models import *
-from docmanager.models import *
-from displaymanager.models import *
 from models import *
 
 from utilities.export import export
 
 def index(req):
-    template_name="childhealth/index.html"
+    template_name="growthmonitoring/index.html"
     surveyentries = SurveyEntry.objects.order_by('survey_date')
     all = []
     [ all.append(entry) for entry in surveyentries]

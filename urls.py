@@ -3,7 +3,6 @@
 
 
 from django.conf.urls.defaults import *
-from apps.docmanager.models import *
 
 import views as v
 
@@ -11,33 +10,13 @@ import views as v
 urlpatterns = patterns('',
     
     # mini dashboard for this app
-    url(r'^childhealth/?$',
+    url(r'^growthmonitoring/?$',
         v.index),
 
-    url(r'^childhealth/csv/surveyentries?$', 
+    url(r'^growthmonitoring/csv/surveyentries?$', 
         v.csv_entries),
 
-    url(r'^childhealth/csv/assessments?$',
+    url(r'^growthmonitoring/csv/assessments?$',
         v.csv_assessments),
-
-    url(r'^childhealth/(?P<breadcrumbs>.*)\/?(?P<view>LocationType|Location)$',
-        v.select_left),
-    
-    url(r'^childhealth/(?P<breadcrumbs>.*)\/?(?P<view>Children|HealthWorker|Report)$',
-        v.select),
-    
-    url(r'^childhealth/(?P<breadcrumbs>.*)\/?date$',
-        v.datefilter),
-    
-    url(r'^childhealth/(?P<breadcrumbs>.*)\/?graph$',
-        v.graphfilter),
-
-    url(r'^childhealth/(?P<id>\d+)/download$',
-        v.download_file,
-        name='download-file'),
-
-   url(r'^childhealth/(?P<header>.*)/(?P<data>.*)/xls$',
-        v.download_excel,
-        name='download-xls'),
  
 )

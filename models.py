@@ -7,19 +7,13 @@ from decimal import Decimal as D
 
 from django.db import models
 from django.db.models.aggregates import Avg
-from django.contrib.auth import models as auth_models
 from django.core.exceptions import ObjectDoesNotExist 
 
-from logger.models import IncomingMessage
-#from locations.models import Location  
 from reporters.models import Reporter, PersistantConnection
 from people.models import Person
 
 from pygrowup.pygrowup import helpers
 
-#from healthtables.models import StuntingTable, WastingTable
-#from messages import *
-   
 class HealthWorker(Reporter):
     HW_STATUS_CHOICES = (
         ('A', 'Active'),
