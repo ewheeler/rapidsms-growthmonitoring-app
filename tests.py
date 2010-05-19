@@ -2,8 +2,7 @@ from rapidsms.tests.scripted import TestScript
 from app import App
 import reporters.app as reporters_app
 
-from childhealth.models import *
-from childhealth.utils import *
+from models import *
 from reporters.models import Reporter, PersistantConnection, PersistantBackend
 from logger.models import *
 from people.models import PersonType
