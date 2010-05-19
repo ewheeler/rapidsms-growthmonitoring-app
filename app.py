@@ -20,8 +20,8 @@ from rapidsms.parsers.keyworder import *
 
 from logger.models import *
 from people.models import PersonType
-from childhealth.models import *
-from childhealth.messages import *
+from models import *
+from messages import *
 #
 # Module level translation calls so we don't have to prefix everything 
 # so we don't have to prefix _t() with 'self'!!
