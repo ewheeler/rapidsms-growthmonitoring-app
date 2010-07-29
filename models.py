@@ -12,7 +12,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from pygrowup.pygrowup import helpers
 
 from rapidsms.models import Contact
-from person.models import Person
+from people.models import Person
 
 class Assessment(models.Model): 
     ASS_STATUS_CHOICES = (
