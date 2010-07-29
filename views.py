@@ -7,12 +7,10 @@ import csv
 
 from django.http import HttpResponse
 
-from rapidsms.webui.utils import render_to_response, paginated
-from locations.models import *
-from reporters.models import *
-from models import *
+from django.template import RequestContext
+from django.shortcuts import redirect, get_object_or_404, render_to_response
 
-from utilities.export import export
+from .models import *
 
 def index(req):
     template_name="growthmonitoring/index.html"
@@ -26,10 +24,7 @@ def index(req):
     # sort by date, descending
     assessments.sort(lambda x, y: cmp(y['date'], x['date']))
 
-    context = {}
-    context['entries'] = paginated(req, all, per_page=50)
-    context['assessments'] = paginated(req, assessments, per_page=50)
-    return render_to_response(req, template_name, context )
+    return render_to_response(template_name, context_instance=RequestContext(req))
 
 def instance_to_dict(instance):
     dict = {}
