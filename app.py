@@ -13,12 +13,9 @@ from django.db.models import F
 from pygrowup.pygrowup import *
 
 import rapidsms
-from rapidsms.message import Message
-from rapidsms.message import StatusCodes
-from rapidsms.connection import Connection
+from rapidsms.apps.base import AppBase
 from rapidsms.parsers.keyworder import *
 
-from logger.models import *
 from people.models import PersonType
 from models import *
 from messages import *
@@ -63,7 +60,7 @@ def _(response_key):
     #        return message.respond(_t(message.reporter.lang, key))
     return _t(_G['DEFAULT_LANG'], response_key)
 
-class App(rapidsms.app.App):
+class App(AppBase):
     #def __init__(self, router):
         # NB: this cannot be called globally
         # because of depencies between GNUTranslations (a -used here) 
