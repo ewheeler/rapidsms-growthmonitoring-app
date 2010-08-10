@@ -4,6 +4,11 @@ RapidSMS app for growth monitoring:
     - instant statistical assessments based on WHO standards
     - available in English and French
 
+Depends on pygrowup library:
+    http://github.com/ewheeler/pygrowup
+        or
+    pip install pygrowup
+
 uses pygrowup to calculate z-scores for the following anthropometric indicators:
     weight-for-age, length/height-for-age, and weight-for-length/height
 based on the WHO Child Growth Standards:
