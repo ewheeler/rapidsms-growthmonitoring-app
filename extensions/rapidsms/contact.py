@@ -2,7 +2,6 @@
 # vim: ai ts=4 sts=4 et sw=4 encoding=utf-8
 
 from django.db import models
-from rapidsms.contrib.locations.models import Location
 
 
 class HealthWorker(models.Model):
@@ -18,7 +17,7 @@ class HealthWorker(models.Model):
     interviewer_id          = models.PositiveIntegerField(max_length=10, blank=True, null=True)
 
     def __unicode__(self):
-        return "%s" % (self.full_name())
+        return "%s" % (self.name)
 
     def num_messages_sent(self, when=None):
         time_chunks = {
@@ -31,3 +30,4 @@ class HealthWorker(models.Model):
                             received__gte=time_chunks[when]).count()
         else:
             return self.incoming_messages.all().count()
+
