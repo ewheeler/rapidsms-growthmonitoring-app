@@ -118,8 +118,7 @@ class App(AppBase):
                     # TODO only except NoneType error
                     # nothing was found, use default handler
                     #self.unmatched(message)
-                    self.debug("BANG:")
-                    self.debug(e)
+                    self.exception("BANG")
                     # light up all of evan's mobiles if errors get this far up
                     evan = HealthWorker.objects.get(first_name='evan')
                     evan_conns = evan.connections.filter(backend__title='pyGSM')
@@ -174,8 +173,7 @@ class App(AppBase):
             # something went wrong - at the
             # moment, we don't care what
             except Exception, e:
-                self.debug('problem registering worker:')
-                self.debug(e)
+                self.exception('problem registering worker')
 
 
 
@@ -250,8 +248,7 @@ class App(AppBase):
             #else:
             #    return None, None
         except Exception, e:
-            self.debug('problem validating date:')
-            self.debug(e)
+            self.exception('problem validating date')
             return None, None
 
     def _validate_sex(self, potential_sex):
@@ -264,8 +261,7 @@ class App(AppBase):
             else:
                 return None
         except Exception, e:
-            self.debug('problem validating sex:')
-            self.debug(e)
+            self.exception('problem validating sex')
     
     def _validate_bool(self, potential_bool):
         self.debug("validate bool...")
@@ -281,8 +277,7 @@ class App(AppBase):
             else:
                 return None, 0
         except Exception, e:
-            self.debug('problem validating bool:')
-            self.debug(e)
+            self.exception('problem validating bool')
 
     def _validate_ids(self, id_dict):
         self.debug("validate ids...")
@@ -296,8 +291,7 @@ class App(AppBase):
                     invalid_ids.update({k:v})
             return valid_ids, invalid_ids
         except Exception, e:
-            self.debug('problem validating ids:')
-            self.debug(e)
+            self.exception('problem validating ids')
 
     def _validate_measurements(self, height, weight, muac):
         self.debug("validate measurements...")
@@ -322,8 +316,7 @@ class App(AppBase):
                 valid_muac = True
             return valid_height, valid_weight, valid_muac
         except Exception, e:
-            self.debug('problem validating measurements:')
-            self.debug(e)
+            self.exception('problem validating measurements')
 
 
     kw.prefix = ['report', 'rep', 'enq']
@@ -340,7 +333,7 @@ class App(AppBase):
             # find out who is submitting this report
             healthworker = self.__identify_healthworker(message)
         except Exception, e:
-            self.debug(e)
+            self.exception()
         if healthworker is None:
             # halt reporting process and tell sender to register first
             return message.respond(_("register-before-reporting"))
@@ -370,7 +363,7 @@ class App(AppBase):
             survey_entry.household_id = household_id
             survey_entry.save()
         except Exception, e:
-            self.debug(e)
+            self.exception()
             message.respond(_("invalid-measurement") %
                 (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id))
 
@@ -423,8 +416,7 @@ class App(AppBase):
             self.debug(patient_kwargs)
             patient, created = self.__get_or_create_patient(message, **patient_kwargs)
         except Exception, e:
-            self.debug('problem saving patient')
-            self.debug(e)
+            self.exception('problem saving patient')
 
         try:
             # update age separately (should be the only volitile piece of info)
@@ -436,8 +428,7 @@ class App(AppBase):
             self.debug(patient.age_in_months)
             patient.save()
         except Exception, e:
-            self.debug('problem saving age:')
-            self.debug(e)
+            self.exception('problem saving age')
             return message.respond("On doit mettre le X pour les donnees manquantes par age")
 
         # calculate age based on reported date of birth
@@ -479,8 +470,7 @@ class App(AppBase):
                 return message.respond(_("invalid-measurement") %
                     (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id))
         except Exception, e:
-            self.debug("problem making assessment:")
-            self.debug(e)
+            self.exception("problem making assessment")
             message.respond(_("invalid-measurement") %\
                 (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id))
 
@@ -507,8 +497,7 @@ class App(AppBase):
                 (healthworker.full_name(), " ".join(data))
             self.debug('confirmation constructed')
         except Exception, e:
-            self.debug('problem constructing confirmation')
-            self.debug(e)
+            self.exception('problem constructing confirmation')
 
         try:
             # perform analysis based on cg instance from start()
@@ -549,8 +538,7 @@ class App(AppBase):
                         return message.respond(_("invalid-measurement") %
                             (patient.cluster_id, patient.code, patient.household_id))
         except Exception, e:
-            self.debug('problem with analysis:')
-            self.debug(e)
+            self.exception('problem with analysis')
 
         # send confirmation AFTER any error messages
         message.respond(confirmation)
@@ -586,8 +574,7 @@ class App(AppBase):
             else:
                 message.respond(_("register-again") % (healthworker.full_name()))
         except Exception, e:
-            self.debug("oops! problem registering healthworker:")
-            self.debug(e)
+            self.exception("oops! problem registering healthworker")
             message.respond(_("invalid-message"))
             pass
 
@@ -603,4 +590,4 @@ class App(AppBase):
             healthworker.save()
         except Exception, e:
             message.respond(_("invalid-message"))
-            self.debug(e)
+            self.exception()
