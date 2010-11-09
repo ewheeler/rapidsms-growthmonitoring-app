@@ -136,7 +136,8 @@ class App(AppBase):
 	    pass
 
     def __identify_healthworker(self, msg):
-        if msg.persistance_dict.has_key('reporter'):
+        if hasattr(msg, 'persistance_dict') and\
+           msg.persistance_dict.has_key('reporter'):
             # if healthworker is already registered on this connection, return him/her
             healthworker = HealthWorker.objects.get(pk=msg.persistance_dict['reporter'].pk)
             return healthworker
@@ -342,7 +343,7 @@ class App(AppBase):
             self.debug(e)
         if healthworker is None:
             # halt reporting process and tell sender to register first
-            return message.respond(_("register-before-reporting"), StatusCodes.APP_ERROR)
+            return message.respond(_("register-before-reporting"))
 
         token_labels = ['gender', 'date_of_birth', 'age_in_months', 'weight', 'height', 'oedema', 'muac']
         token_data = data_tokens.split()
@@ -350,7 +351,7 @@ class App(AppBase):
         try:
             if len(token_data) > 7:
                 self.debug("too much data")
-                message.respond(_("too-many-tokens"), StatusCodes.APP_ERROR)
+                message.respond(_("too-many-tokens"))
 
             tokens = dict(zip(token_labels, token_data))
 
@@ -370,9 +371,8 @@ class App(AppBase):
             survey_entry.save()
         except Exception, e:
             self.debug(e)
-            message.respond(_("invalid-measurement") %\
-                (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id),\
-                StatusCodes.APP_ERROR)
+            message.respond(_("invalid-measurement") %
+                (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id))
 
         # check that all three id codes are numbers
         valid_ids, invalid_ids = self._validate_ids({'interviewer' : str(healthworker.interviewer_id),\
@@ -380,7 +380,7 @@ class App(AppBase):
         # send responses for each invalid id, if any
         if len(invalid_ids) > 0:
             for k,v in invalid_ids.iteritems():
-                message.respond(_("invalid-id") % (v, k), StatusCodes.APP_ERROR)
+                message.respond(_("invalid-id") % (v, k))
             # halt reporting process if any of the id codes are invalid
             return True
 
@@ -405,7 +405,7 @@ class App(AppBase):
                 patient_kwargs.update({'date_of_birth' : dob_obj})
             else:
                 patient_kwargs.update({'date_of_birth' : ""})
-                message.respond(_("invalid-dob") % (survey_entry.date_of_birth), StatusCodes.APP_ERROR)
+                message.respond(_("invalid-dob") % (survey_entry.date_of_birth))
 
         # make sure reported gender is valid
         good_sex = self._validate_sex(survey_entry.gender)
@@ -416,7 +416,7 @@ class App(AppBase):
             patient_kwargs.update({'gender' : ""}) 
             # halt reporting process if we dont have a valid gender.
             # this can't be unknown. check in their pants if you arent sure
-            return message.respond(_("invalid-gender") % (survey_entry.gender), StatusCodes.APP_ERROR)
+            return message.respond(_("invalid-gender") % (survey_entry.gender))
 
         try:
             # find patient or create a new one
@@ -476,15 +476,13 @@ class App(AppBase):
                         height=measurements['height'], weight=measurements['weight'],\
                         muac=measurements['muac'], oedema=bool_oedema, survey=survey)
             else:
-                return message.respond(_("invalid-measurement") %\
-                    (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id),\
-                    StatusCodes.APP_ERROR)
+                return message.respond(_("invalid-measurement") %
+                    (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id))
         except Exception, e:
             self.debug("problem making assessment:")
             self.debug(e)
             message.respond(_("invalid-measurement") %\
-                (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id),\
-                StatusCodes.APP_ERROR)
+                (survey_entry.cluster_id, survey_entry.child_id, survey_entry.household_id))
 
         ass.save()
         self.debug("saved assessment")
@@ -547,10 +545,9 @@ class App(AppBase):
                         survey_entry.save()
                         ass.status = 'S'
                         ass.save()
-                        #message.respond(response_map[ind], StatusCodes.APP_ERROR)
-                        return message.respond(_("invalid-measurement") %\
-                            (patient.cluster_id, patient.code, patient.household_id),\
-                            StatusCodes.APP_ERROR)
+                        #message.respond(response_map[ind])
+                        return message.respond(_("invalid-measurement") %
+                            (patient.cluster_id, patient.code, patient.household_id))
         except Exception, e:
             self.debug('problem with analysis:')
             self.debug(e)
@@ -560,7 +557,7 @@ class App(AppBase):
         self.debug('sent confirmation')
 
     def unmatched(self, message):
-        message.respond(_("invalid-message"), StatusCodes.APP_ERROR)
+        message.respond(_("invalid-message"))
 
     kw.prefix = ['cancel', 'can']
     @kw("(\d+?) (\d+?) (\d+?)")
@@ -591,7 +588,7 @@ class App(AppBase):
         except Exception, e:
             self.debug("oops! problem registering healthworker:")
             self.debug(e)
-            message.respond(_("invalid-message"), StatusCodes.APP_ERROR)
+            message.respond(_("invalid-message"))
             pass
 
     @kw("remove (\d+?)")
@@ -605,5 +602,5 @@ class App(AppBase):
             healthworker.interviewer_id = None 
             healthworker.save()
         except Exception, e:
-            message.respond(_("invalid-message"), StatusCodes.APP_ERROR)
+            message.respond(_("invalid-message"))
             self.debug(e)
