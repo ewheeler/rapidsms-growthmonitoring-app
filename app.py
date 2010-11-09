@@ -130,11 +130,11 @@ class App(AppBase):
 	    pass
 
     def __identify_healthworker(self, msg):
-        if msg.connection is not None:
-            # if healthworker is already registered on this connection, return him/her
-            healthworker = Contact.objects.get(connection=msg.connection)
+        # if healthworker is already registered on this connection, return him/her
+        try:
+            healthworker = msg.connection.contact
             return healthworker
-        else:
+        except ObjectDoesNotExist:
             return None
 
     def __register_healthworker(self, msg, interviewer_id, name, lang='fr'):
@@ -142,25 +142,24 @@ class App(AppBase):
         try:
             # find healthworker via interviewer_id and add new connection
             # (e.g., registering from a second connection)
-            alias, first, last = Reporter.parse_name(name)
-            healthworker = HealthWorker.objects.get(interviewer_id=interviewer_id,\
-                first_name=first, last_name=last)
-            per_con = msg.connection
-            per_con.save()
+            alias, first, last = Contact.parse_name(name)
+            healthworker = Contact.objects.get(interviewer_id=interviewer_id,\
+                first_name=first, last_name=last, name=name)
+            msg.connection.contact=healthworker
+            msg.connection.save()
             return healthworker, False
         except ObjectDoesNotExist, MultipleObjectsReturned:
             try:
                 # TODO remove connection from previous hw
                 # parse the name, and create a healthworker/reporter
                 # (e.g., registering from first connection)
-                alias, first, last = Reporter.parse_name(name)
-                healthworker = HealthWorker(
+                alias, first, last = Contact.parse_name(name)
+                healthworker = Contact(
                     first_name=first, last_name=last, alias=alias,
-                    interviewer_id=interviewer_id, registered_self=True,
-                     language=lang)
+                    interviewer_id=interviewer_id, language=lang, name=name)
                 healthworker.save()
-                per_con = msg.connection
-                per_con.save()
+                msg.connection.contact=healthworker
+                msg.connection.save()
                 return healthworker, True
             # something went wrong - at the
             # moment, we don't care what
@@ -327,11 +326,10 @@ class App(AppBase):
 
         except ObjectDoesNotExist, MultipleObjectsReturned:
             return message.respond("No active survey at this date")
-        try:
-            # find out who is submitting this report
-            healthworker = self.__identify_healthworker(message)
-        except Exception, e:
-            self.debug(e)
+
+        # find out who is submitting this report
+        healthworker = self.__identify_healthworker(message)
+
         if healthworker is None:
             # halt reporting process and tell sender to register first
             return message.respond(_("register-before-reporting"))
@@ -586,7 +584,7 @@ class App(AppBase):
     def remove_healthworker(self, message, code):
         self.debug("removing...")
         try:
-            healthworker = HealthWorker.objects.get(interviewer_id=code)
+            healthworker = Contact.objects.get(interviewer_id=code)
             healthworker.status = 'I'
             healthworker.save()
             message.respond(_("remove-confirm") % (healthworker.name, healthworker.interviewer_id))
