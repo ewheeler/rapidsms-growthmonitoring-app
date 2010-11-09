@@ -80,6 +80,7 @@ class Keyworder(object):
                 # note: match groups can be None, hence the and/or business
                 groups = map(lambda x: x and x.strip() or x, match.groups())
                 return (func, groups)
+        return None, None
         # TODO proper logging??
         #print "No method called %s" % (str)
 
