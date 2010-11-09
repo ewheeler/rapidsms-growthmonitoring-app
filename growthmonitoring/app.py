@@ -14,9 +14,10 @@ from pygrowup.pygrowup import *
 
 import rapidsms
 from rapidsms.apps.base import AppBase
-from rapidsms.parsers.keyworder import *
 
 from people.models import PersonType
+
+from keyworder import Keyworder
 from models import *
 from messages import *
 #
