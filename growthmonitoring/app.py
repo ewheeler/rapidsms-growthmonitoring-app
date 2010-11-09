@@ -9,6 +9,7 @@ import gettext
 
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.db.models import F
+from django.conf import settings
 
 from pygrowup.pygrowup import *
 
@@ -35,6 +36,9 @@ _G = {
     'TRANSLATORS': {"en": FAKE_GETTEXT["en"], "fr": FAKE_GETTEXT["fr"]},
     'DEFAULT_LANG':'fr',
     }
+
+# update default values with any project-level settings
+_G.update(getattr(settings, 'GROWTHMONITORING_SETTINGS', {}))
 
 ########
 # i18n #
