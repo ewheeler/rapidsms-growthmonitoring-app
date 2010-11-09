@@ -8,15 +8,8 @@ import views as v
 
 
 urlpatterns = patterns('',
-    
     # mini dashboard for this app
-    url(r'^growthmonitoring/?$',
-        v.index),
-
-    url(r'^growthmonitoring/csv/surveyentries?$', 
-        v.csv_entries),
-
-    url(r'^growthmonitoring/csv/assessments?$',
-        v.csv_assessments),
- 
+    url(r'^$', v.index),
+    url(r'^csv/surveyentries/$', v.csv_entries, name='growth_surveyentries'),
+    url(r'^csv/assessments/$', v.csv_assessments, name='growth_assessments'),
 )
