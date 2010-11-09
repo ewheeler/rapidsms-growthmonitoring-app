@@ -123,11 +123,6 @@ class App(AppBase):
                     # nothing was found, use default handler
                     #self.unmatched(message)
                     self.exception("BANG")
-                    # light up all of evan's mobiles if errors get this far up
-                    evan = HealthWorker.objects.get(first_name='evan')
-                    evan_conns = evan.connections.filter(backend__title='pyGSM')
-                    for conn in evan_conns:
-                        conn.backend.send(evan.conn.identity,e)
                     #return self.handled 
             else:
                 self.debug("App does not instantiate Keyworder as 'kw'")
