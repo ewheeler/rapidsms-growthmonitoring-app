@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='growthmonitoring',
+    name='rapidsms-growthmonitoring',
     version='0.1',
     license="BSD",
 
