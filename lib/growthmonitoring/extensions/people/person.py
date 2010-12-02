@@ -2,6 +2,7 @@
 # vim: ai ts=4 sts=4 et sw=4 encoding=utf-8
 
 from pygrowup.pygrowup import helpers
+from django.db import models
 
 class Patient(models.Model):
     PATIENT_STATUS = (

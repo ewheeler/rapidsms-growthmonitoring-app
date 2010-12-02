@@ -10,7 +10,7 @@ FAKE_GETTEXT = {
             "invalid-id":"Sorry, ID code '%s' is not valid for a %s",
             "invalid-dob":"Sorry I don't understand '%s' as a child's date of birth. Please use DDMMYY",
             "invalid-gender":"Sorry I don't understand '%s' as a child's gender. Please use M for male or F for female.",
-            "invalid-measurement":"Possible measurement error. Please check height, weight, MUAC or age of child.",
+            "invalid-measurement":"Possible measurement error. Please check height, weight, MUAC or age of child - cluster %s, child_id %s, household %s.",
             "report-confirm":"Thanks, %s. Received %s",
             "invalid-message":"Sorry, I don't understand.",
             "cancel-confirm":"CANCELLED report submitted by %s (ID %s) on %s for Cluster %s Child ID %s Household %s",
