@@ -16,7 +16,7 @@ setup(
     download_url='https://github.com/mwana/rapidsms-growthmonitoring-app/downloads',
 
     package_dir={'': 'lib'},
-    packages=['growthmonitoring'],
+    packages=find_packages('lib', exclude=['*.pyc']),
     include_package_data=True,
 
     classifiers=[
