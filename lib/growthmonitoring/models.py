@@ -77,11 +77,11 @@ class Assessment(models.Model):
         return results
 
     def zscores(self, childgrowth):
-        print 'ZSCORES'
+        #print 'ZSCORES'
         age = self.patient.age_in_months
-        print age
+        #print age
         gender = self.patient.gender
-        print gender
+        #print gender
         if age is not None:
             if self.weight is not None:
                 self.weight4age = childgrowth.zscore_for_measurement(\
