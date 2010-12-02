@@ -73,6 +73,7 @@ class Keyworder(object):
         return decorator
 
     def match(self, sself, str):
+        print "\n\nMATCHING\n\n: %s" % str
         for pat, func in self.regexen:
             match = pat.match(str)
             if match:
@@ -80,7 +81,6 @@ class Keyworder(object):
                 # note: match groups can be None, hence the and/or business
                 groups = map(lambda x: x and x.strip() or x, match.groups())
                 return (func, groups)
-        return None, None
         # TODO proper logging??
         #print "No method called %s" % (str)
 
