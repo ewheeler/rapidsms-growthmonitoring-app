@@ -91,3 +91,6 @@ class HealthWorker(models.Model):
         # so just return the whole thing
         alias = unique(re.sub(r"[^a-zA-Z]", "", flat_name))
         return (alias.lower(), flat_name, "")
+
+    class Meta:
+        abstract = True        

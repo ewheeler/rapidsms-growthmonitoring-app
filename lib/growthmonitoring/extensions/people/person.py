@@ -54,4 +54,5 @@ class Patient(models.Model):
             return "NA"
 
     class Meta:
+        abstract = True
         verbose_name = "Patient"
