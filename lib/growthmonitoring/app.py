@@ -106,32 +106,15 @@ class App(AppBase):
         message.respond(log[key])
 
     def handle(self, message):
-        # log message
-        try:
-            if hasattr(self, "kw"):
-                try:
-                    # attempt to match tokens in this message
-                    # using the keyworder parser
-                    func, captures = self.kw.match(self, message.text.lower())
-                    self.debug(func)
-                    func(self, message, *captures)
-                    # short-circuit handler calls because 
-                    # we are responding to this message
-                    return self.handled
-                except Exception, e:
-                    # TODO only except NoneType error
-                    # nothing was found, use default handler
-                    #self.unmatched(message)
-                    self.exception("BANG")
-                    #return self.handled 
-            else:
-                self.debug("App does not instantiate Keyworder as 'kw'")
-        except Exception, e:
-	    # TODO maybe don't log here bc any message not meant
-	    # for this app will log this error
-	    #
-            # self.error(e) 
-	    pass
+        # attempt to match tokens in this message
+        # using the keyworder parser
+        func, captures = self.kw.match(self, message.text.lower())
+        if func and captures:
+            self.debug(func)
+            func(self, message, *captures)
+            # short-circuit handler calls because 
+            # we are responding to this message
+            return self.handled
 
     def __identify_healthworker(self, msg):
         # if healthworker is already registered on this connection, return him/her
