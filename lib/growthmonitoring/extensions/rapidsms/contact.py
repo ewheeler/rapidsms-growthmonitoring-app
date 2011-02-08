@@ -17,7 +17,8 @@ class HealthWorker(models.Model):
     status                 = models.CharField(max_length=1,choices=HW_STATUS_CHOICES,default='A')
     interviewer_id          = models.PositiveIntegerField(max_length=10, blank=True, null=True)
 
-    alias      = models.CharField(max_length=20, unique=True)
+    # disabled because the mwana labresults app also provides an alias field
+    #alias      = models.CharField(max_length=20, unique=True)
     first_name = models.CharField(max_length=30, blank=True)
     last_name  = models.CharField(max_length=30, blank=True)
 
@@ -49,12 +50,12 @@ class HealthWorker(models.Model):
             r"([a-z]+)\s+([a-z]+\-[a-z]+)"     # Erica Kochi-Fabian
         ]
 
-        def unique(str):
+        def unique(in_str, max_length=20):
             """Checks an alias for uniqueness; if it is already taken, alter it
                (by append incrementing digits) until an available alias is found."""
 
             n = 1
-            alias = str.lower()
+            alias = in_str.lower()[:max_length]
 
             # keep on looping until an alias becomes available.
             # --
@@ -63,7 +64,7 @@ class HealthWorker(models.Model):
             # with it! This should logic should probably be moved to the
             # initializer, to make the find/grab alias loop atomic
             while klass.objects.filter(alias__iexact=alias).count():
-                alias = "%s%d" % (str.lower(), n)
+                alias = "%s%d" % (in_str.lower()[:max_length-len(str(n))], n)
                 n += 1
 
             return alias
