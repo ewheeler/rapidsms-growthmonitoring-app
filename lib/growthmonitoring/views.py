@@ -12,19 +12,17 @@ from django.shortcuts import redirect, get_object_or_404, render_to_response
 
 from .models import *
 
+
 def index(req):
     template_name="growthmonitoring/index.html"
-    surveyentries = SurveyEntry.objects.order_by('survey_date')
-    all = []
-    [ all.append(entry) for entry in surveyentries]
-    # sort by date, descending
-    all.sort(lambda x, y: cmp(y.survey_date, x.survey_date))
-
+    surveyentries = SurveyEntry.objects.order_by('-survey_date')
     assessments = ass_dicts_for_display()
     # sort by date, descending
     assessments.sort(lambda x, y: cmp(y['date'], x['date']))
+    context = {'assessments': assessments, 'entries': surveyentries}
+    return render_to_response(template_name, context,
+                              context_instance=RequestContext(req))
 
-    return render_to_response(template_name, context_instance=RequestContext(req))
 
 def instance_to_dict(instance):
     dict = {}
@@ -64,15 +62,11 @@ def ass_dicts_for_display():
         dicts_for_display.append(ass_dict)
     return dicts_for_display
 
+
 # TODO DRY
 def ass_dicts_for_export():
     dicts_for_export = []
-    #asses = Assessment.objects.all().select_related()
-    patients = Patient.objects.all()
-    asses = []
-    for patient in patients:
-        if patient.latest_assessment() is not None:
-            asses.append(patient.latest_assessment())
+    asses = Assessment.objects.all().select_related()
 
     for ass in asses:
         ass_dict = {}
@@ -92,39 +86,50 @@ def ass_dicts_for_export():
         dicts_for_export.append(ass_dict)
     return dicts_for_export
 
-def csv_assessments(req):
+
+def export(headers, keys, objects, file_name):
     # Create the HttpResponse object with the appropriate CSV header.
     response = HttpResponse(mimetype='text/csv')
-    response['Content-Disposition'] = 'attachment; filename=assessments.csv'
-
-    assessments = ass_dicts_for_export()
-    # sort by date, descending
-    assessments.sort(lambda x, y: cmp(y['date'], x['date']))
+    response['Content-Disposition'] = 'attachment; filename=%s' % file_name
 
     writer = csv.writer(response)
     # column labels
-    writer.writerow(['date', 'interviewer ID', 'cluster ID', 'child ID',\
-        'household ID', 'sex', 'date of birth', 'age in months', 'height',\
-        'weight', 'oedema', 'muac', 'height for age', 'weight for age',\
-        'weight for height', 'survey status'])
-    for ass in assessments:
+    writer.writerow(headers)
+    for obj in objects:
         row = []
-        keys = ['date', 'interviewer_id', 'cluster_id', 'child_id',\
-            'household_id', 'sex', 'date_of_birth', 'age_in_months',\
-            'height', 'weight', 'oedema', 'muac', 'height4age', 'weight4age',\
-            'weight4height', 'human_status']
         for key in keys:
-            if ass.has_key(key):
-                row.append(ass[key])
+            if isinstance(obj, dict) and key in obj:
+                row.append(obj[key])
+            elif hasattr(obj, key):
+                row.append(getattr(obj, key))
             else:
                 row.append("None")
         writer.writerow(row)
 
     return response
 
-def csv_entries(req, format='csv'):
-    context = {}
-    if req.user.is_authenticated():
-        return export(SurveyEntry.objects.all())
-    return export(SurveyEntry.objects.all(), ['Survey Date','Interviewer ID','Cluster ID','Child ID','Household ID', 'Sex', 'Date of Birth', 'Age', 'Height', 'Weight', 'Oedema', 'MUAC'])
 
+def csv_assessments(req):
+    headers = ['date', 'interviewer ID', 'cluster ID', 'child ID',
+        'household ID', 'sex', 'date of birth', 'age in months', 'height',
+        'weight', 'oedema', 'muac', 'height for age', 'weight for age',
+        'weight for height', 'survey status']
+    keys = ['date', 'interviewer_id', 'cluster_id', 'child_id',
+            'household_id', 'sex', 'date_of_birth', 'age_in_months',
+            'height', 'weight', 'oedema', 'muac', 'height4age', 'weight4age',
+            'weight4height', 'human_status']
+    
+    assessments = ass_dicts_for_export()
+    # sort by date, descending
+    assessments.sort(lambda x, y: cmp(y['date'], x['date']))
+    return export(headers, keys, assessments, 'assessments.csv')
+
+
+def csv_entries(req):
+    headers = ['Survey Date', 'Interviewer ID', 'Cluster ID', 'Child ID',
+               'Household ID', 'Sex', 'Date of Birth', 'Age', 'Height',
+               'Weight', 'Oedema', 'MUAC']
+    keys = ['survey_date', 'healthworker_id', 'cluster_id', 'child_id',
+            'household_id', 'gender', 'date_of_birth', 'age_in_months',
+            'height', 'weight', 'oedema', 'muac']
+    return export(headers, keys, SurveyEntry.objects.all(), 'entries.csv')

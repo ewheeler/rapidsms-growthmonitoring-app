@@ -28,24 +28,24 @@
         </tr>
     </thead>
     <tbody>
-        {% for ass in assessments.object_list %}
+        {% for assessment in assessments %}
             <tr>
-                <td>{{ass.date|date:"d-M-Y H:m:s"}}</td>
-                <td>{{ass.interviewer_id}}</td>
-                <td>{{ass.cluster_id}}</td>
-                <td>{{ass.child_id}}</td>
-                <td>{{ass.household_id}}</td>
-                <td>{{ass.sex}}</td>{# LOL!! #}
-                <td>{{ass.date_of_birth}}</td>
-                <td>{{ass.age_in_months}}</td>
-                <td>{{ass.height}}</td>
-                <td>{{ass.weight}}</td>
-                <td>{{ass.oedema|yesno:"Y,N"}}</td>
-                <td>{{ass.muac}}</td>
-                <td>{{ass.weight4age}}</td>
-                <td>{{ass.height4age}}</td>
-                <td>{{ass.weight4height}}</td>
-                <td>{{ass.human_status}}</td>
+                <td>{{assessment.date|date:"d-M-Y H:m:s"}}</td>
+                <td>{{assessment.interviewer_id}}</td>
+                <td>{{assessment.cluster_id}}</td>
+                <td>{{assessment.child_id}}</td>
+                <td>{{assessment.household_id}}</td>
+                <td>{{assessment.sex}}</td>
+                <td>{{assessment.date_of_birth}}</td>
+                <td>{{assessment.age_in_months}}</td>
+                <td>{{assessment.height}}</td>
+                <td>{{assessment.weight}}</td>
+                <td>{{assessment.oedema|yesno:"Y,N"}}</td>
+                <td>{{assessment.muac}}</td>
+                <td>{{assessment.weight4age}}</td>
+                <td>{{assessment.height4age}}</td>
+                <td>{{assessment.weight4height}}</td>
+                <td>{{assessment.human_status}}</td>
             </tr>
         {% endfor %}
     </tbody>
@@ -78,7 +78,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for entry in entries.object_list %}
+        {% for entry in entries %}
             <tr>
                 <td>{{entry.survey_date|date:"d-M-Y H:m:s"}}</td>
                 <td>{{entry.healthworker_id}}</td>
