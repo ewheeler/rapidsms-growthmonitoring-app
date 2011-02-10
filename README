@@ -3,6 +3,10 @@ RapidSMS app for growth monitoring:
     - keep track of patient data over time
     - instant statistical assessments based on WHO standards
     - available in English and French
+    - currently implements registration, so disable rapidsms.contrib.regsistration
+
+Depends on people app:
+    https://github.com/ewheeler/rapidsms-people-app
 
 Depends on pygrowup library:
     http://github.com/ewheeler/pygrowup
