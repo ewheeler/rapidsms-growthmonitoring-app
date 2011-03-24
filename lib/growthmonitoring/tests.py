@@ -12,7 +12,7 @@ class TestApp (TestScript):
 
     def setUp(self):
         TestScript.setUp(self)
-	survey = Survey.objects.create(location='test', begin_date=date.today()-timedelta(7), end_date=date.today()+timedelta(7))
+        survey = Survey.objects.create(location='test', begin_date=date.today()-timedelta(7), end_date=date.today()+timedelta(7))
         # this is the birthdate used in the tests
         birthdate = date(2008,2,10)
         td = date.today() - birthdate
