@@ -455,23 +455,22 @@ class App(AppBase):
         self.debug("saved assessment")
 
         try:
-            data = [
-                    "GrappeID=%s"  % (patient.cluster_id or "??"),
-                    "EnfantID=%s"  % (patient.code or "??"),
-                    #u"MénageID=%s"  % (unicode(patient.household_id) or u"??"),
-                    "MenageID=%s"  % (patient.household_id or "??"),
-                    "sexe=%s"      % (patient.gender or "??"),
-                    "DN=%s"        % (patient.date_of_birth or "??"),
-                    #u"âge=%sm"      % (unicode(patient.age_in_months) or u"??"),
-                    "age=%sm"      % (patient.age_in_months or "??"),
-                    "poids=%skg"   % (ass.weight or "??"),
-                    "taille=%scm"  % (ass.height or "??"),
-                    "oedemes=%s"   % (ass.human_oedema or "??"),
-                    "PB=%scm"      % (ass.muac or "??")]
+            data = {
+                "name": healthworker.name,
+                "cluster_id": patient.cluster_id or "??",
+                "code": patient.code or "??",
+                "household_id": patient.household_id or "??",
+                "gender": patient.gender or "??",
+                "date_of_birth": patient.date_of_birth or "??",
+                "age_in_months": patient.age_in_months or "??",
+                "weight": ass.weight or "??",
+                "height": ass.height or "??",
+                "human_oedema": ass.human_oedema or "??",
+                "muac": ass.muac or "??",
+            }
 
             self.debug('constructing confirmation')
-            confirmation = _("report-confirm") %\
-                (healthworker.name, " ".join(data))
+            confirmation = _("report-confirm") % data
             self.debug('confirmation constructed')
         except Exception, e:
             self.exception('problem constructing confirmation')

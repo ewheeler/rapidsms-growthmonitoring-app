@@ -30,7 +30,7 @@ class TestApp (TestScript):
            555555 > Enq 112 3 2 m 100208 x 15.6 79.2 N 19.7 
            555555 < Possible measurement error. Please check height, weight, MUAC or age of child - cluster 112, child_id 3, household 2.
            555555 > Enq 112 3 2 m 100208 x 15.6 89.2 N 19.7
-           555555 < Thanks, mister tester. Received GrappeID=112 EnfantID=3 MenageID=2 sexe=M DN=2008-02-10 age=%sm poids=15.6kg taille=89.2cm oedemes=N PB=19.7cm
+           555555 < Thanks, mister tester. Received ClusterID=112 ChildID=3 HouseholdID=2 Gender=M DOB=2008-02-10 Age=%sm Weight=15.6kg Height=89.2cm Oedema=N Muac=19.7cm
          """ % self.months_ago)
         # check that a Mister Tester contact has been created
         mister_tester = Connection.objects.get(identity="555555").contact
