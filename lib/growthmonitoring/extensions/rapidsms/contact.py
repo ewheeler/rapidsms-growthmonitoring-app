@@ -13,7 +13,7 @@ class HealthWorker(models.Model):
     last_updated           = models.DateTimeField(auto_now=True)
     # counter for measurement errors, not poor texting skills
     # incremented only when z-scores indicate unreasonable measurements
-    errors                 = models.IntegerField(max_length=5,default=0) 
+    errors                 = models.IntegerField(max_length=5,default=0)
     status                 = models.CharField(max_length=1,choices=HW_STATUS_CHOICES,default='A')
     interviewer_id          = models.PositiveIntegerField(max_length=10, blank=True, null=True)
 
@@ -94,4 +94,4 @@ class HealthWorker(models.Model):
         return (alias.lower(), flat_name, "")
 
     class Meta:
-        abstract = True        
+        abstract = True
