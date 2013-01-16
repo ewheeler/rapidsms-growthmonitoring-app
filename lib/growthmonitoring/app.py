@@ -11,7 +11,8 @@ from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.db.models import F
 from django.conf import settings
 
-from pygrowup.pygrowup import *
+from pygrowup import Calculator
+from pygrowup import helpers
 
 import rapidsms
 from rapidsms.apps.base import AppBase
@@ -22,12 +23,12 @@ from people.models import PersonType
 from models import *
 from messages import *
 #
-# Module level translation calls so we don't have to prefix everything 
+# Module level translation calls so we don't have to prefix everything
 # so we don't have to prefix _t() with 'self'!!
 #
 
 # Mutable globals hack 'cause Python module globals are WHACK
-_G = { 
+_G = {
     'SUPPORTED_LANGS': {
         # 'deb':u'Debug',
         'fr':[u'Français'],
@@ -68,7 +69,7 @@ def _(response_key):
 class App(AppBase):
     #def __init__(self, router):
         # NB: this cannot be called globally
-        # because of depencies between GNUTranslations (a -used here) 
+        # because of depencies between GNUTranslations (a -used here)
         # and DJangoTranslations (b -used in views)
         # i.e. initializing b then a is ok, but a then b fails
         #_init_translators()
@@ -83,7 +84,7 @@ class App(AppBase):
     year = r"\d{2}(\d{2})?"
     # expecting YYYY-MM-DD, YY-MM-DD, YY-M-D, YYYYMMDD, YYMMDD, etc
     datepattern = r"^\d{2}(\d{2})?(?:[\.|\/|\\|\-])?\d\d?(?:[\.|\/|\\|\-])?\d\d?$"
-    
+
     def configure(self, **kwargs):
         try:
             _G['DEFAULT_LANG'] = kwargs.pop('default_lang')
@@ -91,13 +92,13 @@ class App(AppBase):
             pass
 
     def start(self):
-        # initialize childgrowth, which loads WHO tables
+        # initialize pygrowup Calculator, which loads WHO tables
         # TODO is this the best place for this??
-        # TODO make childgrowth options configurable via config.py
-        self.cg = childgrowth(False, False)
+        # TODO make Calculator options configurable via config.py
+        self.cg = Calculator(False, False)
 
     def parse(self, message):
-        self.handled = False 
+        self.handled = False
 
     def respond(message,log={}):
         key = "OK"
@@ -112,7 +113,7 @@ class App(AppBase):
         if func and captures:
             self.debug(func)
             func(self, message, *captures)
-            # short-circuit handler calls because 
+            # short-circuit handler calls because
             # we are responding to this message
             return self.handled
 
@@ -222,7 +223,7 @@ class App(AppBase):
             self.debug(potential_date)
             good_date_str, good_date_obj = helpers.get_good_date(potential_date)
             self.debug(good_date_str)
-            return good_date_str, good_date_obj 
+            return good_date_str, good_date_obj
             #else:
             #    return None, None
         except Exception, e:
@@ -240,7 +241,7 @@ class App(AppBase):
                 return None
         except Exception, e:
             self.exception('problem validating sex')
-    
+
     def _validate_bool(self, potential_bool):
         self.debug("validate bool...")
         self.debug(potential_bool)
@@ -317,7 +318,7 @@ class App(AppBase):
 
         token_labels = ['gender', 'date_of_birth', 'age_in_months', 'weight', 'height', 'oedema', 'muac']
         token_data = data_tokens.split()
-        
+
         try:
             if len(token_data) > 7:
                 self.debug("too much data")
@@ -383,7 +384,7 @@ class App(AppBase):
             self.debug(good_sex)
             patient_kwargs.update({'gender' : good_sex})
         else:
-            patient_kwargs.update({'gender' : ""}) 
+            patient_kwargs.update({'gender' : ""})
             # halt reporting process if we dont have a valid gender.
             # this can't be unknown. check in their pants if you arent sure
             return message.respond(_("invalid-gender") % (survey_entry.gender))
@@ -562,7 +563,7 @@ class App(AppBase):
             healthworker.status = 'I'
             healthworker.save()
             message.respond(_("remove-confirm") % (healthworker.name, healthworker.interviewer_id))
-            healthworker.interviewer_id = None 
+            healthworker.interviewer_id = None
             healthworker.save()
         except Exception, e:
             message.respond(_("invalid-message"))
